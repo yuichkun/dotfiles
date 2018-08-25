@@ -3,6 +3,10 @@ source ~/.zplug/init.zsh
 # Colorize ls command
 alias ls='ls -GF'
 alias la='ls -a'
+# wrap brew-file
+if [ -f $(brew --prefix)/etc/brew-wrap ];then
+  source $(brew --prefix)/etc/brew-wrap
+fi
 
 # set env variables
 export PATH=$HOME/.nodebrew/current/bin:$PATH
