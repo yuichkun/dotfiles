@@ -92,9 +92,7 @@ setopt interactive_comments
 
 
 # Prompt Color
-# PROMPT="%F{196}%n %~ %f"
-autoload -U promptinit; promptinit
-prompt pure
+PROMPT="%F{196}%n %~ %f"
 
 # Then, source plugins and add commands to $PATH
 zplug load --verbose
