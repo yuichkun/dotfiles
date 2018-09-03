@@ -16,11 +16,6 @@ export LANG=ja_JP.UTF-8
 export PATH=/usr/local/mecab/bin:$PATH
 ENHANCD_FILTER=fzy; export ENHANCD_FILTER
 
-# Apps Secret Keys
-# Tity
-export TITY_CONSUMER_KEY="6K4nMAT1OK4XDbkIyWRzybgcw"
-export TITY_CONSUMER_SECRET_KEY="oS4yQKRwFZyThpkDqVbV5UMQVAX3J6QeeiKrbZYr7XhCwrBkxT"
-
 # ヒストリの設定
 HISTFILE=~/.zsh_history
 HISTSIZE=1000000
