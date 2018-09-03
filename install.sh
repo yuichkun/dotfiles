@@ -16,6 +16,6 @@ brew file install
 curl -sL --proto-redir -all,https https://raw.githubusercontent.com/zplug/installer/master/installer.zsh | zsh
 
 # @TODO
-# zplug
-# iTerm2
+
+# enhancd?
 # vim
