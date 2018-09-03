@@ -11,6 +11,9 @@ cp ~/dotfiles/brewfile/Brewfile ~/.brewfile
 brew install rcmdnk/file/brew-file
 brew file install
 
+# setup zsh
+# install zplug
+curl -sL --proto-redir -all,https https://raw.githubusercontent.com/zplug/installer/master/installer.zsh | zsh
 
 # @TODO
 # zplug
