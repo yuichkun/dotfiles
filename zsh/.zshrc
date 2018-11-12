@@ -3,6 +3,7 @@ source ~/.zplug/init.zsh
 # Colorize ls command
 alias ls='ls -GF'
 alias la='ls -a'
+alias c='code .'
 # wrap brew-file
 if [ -f $(brew --prefix)/etc/brew-wrap ];then
   source $(brew --prefix)/etc/brew-wrap
