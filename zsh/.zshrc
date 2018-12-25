@@ -1,9 +1,10 @@
+# init zsh plugins
 source ~/.zplug/init.zsh
-# Aliases
-# Colorize ls command
-alias ls='ls -GF'
-alias la='ls -a'
-alias c='code .'
+# set tmux lancher
+source ~/dotfiles/zsh/tmux.zsh
+# set aliases
+source ~/dotfiles/zsh/aliases.zsh
+
 # wrap brew-file
 if [ -f $(brew --prefix)/etc/brew-wrap ];then
   source $(brew --prefix)/etc/brew-wrap
@@ -11,6 +12,7 @@ fi
 
 # set env variables
 export PATH=$HOME/.nodebrew/current/bin:$PATH
+export PATH=$HOME/dotfiles/utils:$PATH
 export GOPATH=$HOME/go
 export PATH="$HOME/.pyenv/versions/anaconda3-5.1.0/bin:$PATH"
 export LANG=ja_JP.UTF-8
@@ -34,7 +36,6 @@ setopt auto_pushd
 setopt pushd_ignore_dups
 setopt correct
 export BG_COLOR=237
-
 
 # 同時に起動したzshの間でヒストリを共有する
 setopt share_history
