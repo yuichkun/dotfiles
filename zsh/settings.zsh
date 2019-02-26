@@ -1,4 +1,4 @@
-echo 'LOAD:ZSH:SETTINGS'
+LOG SETTINGS
 
 # wrap brew-file
 if [ -f $(brew --prefix)/etc/brew-wrap ];then

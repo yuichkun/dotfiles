@@ -1,3 +1,5 @@
+LOG ENV_VARIABLES
+
 export PATH=$HOME/.nodebrew/current/bin:$PATH
 export PATH=$HOME/dotfiles/utils:$PATH
 export GOPATH=$HOME/go

@@ -1,3 +1,4 @@
+LOG ALIASES
 # Aliases
 
 ## Colorize ls command
