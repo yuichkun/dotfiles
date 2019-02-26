@@ -5,7 +5,7 @@ if [ -f $(brew --prefix)/etc/brew-wrap ];then
   source $(brew --prefix)/etc/brew-wrap
 fi
 
-# Left Prompt
+# Prompt
 PROMPT="%F{196}%n %~ %f"
 
 # Right Prompt
@@ -17,7 +17,7 @@ zstyle ':vcs_info:git:*' unstagedstr "%F{red}+"
 zstyle ':vcs_info:*' formats "%F{green}%c%u[%b]%f"
 zstyle ':vcs_info:*' actionformats '[%b|%a]'
 precmd () { vcs_info }
-RPROMPT='${vcs_info_msg_0_}'
+PROMPT=$PROMPT'${vcs_info_msg_0_}'
 
 # ヒストリの設定
 HISTFILE=~/.zsh_history
