@@ -4,7 +4,7 @@ function INIT_ZSH(){
   function LOG(){
     local LIGHT_GREEN='\033[1;32m'
     local NC='\033[0m'
-    echo "${LIGHT_GREEN}LOAD:${NC}$1"
+    echo "${LIGHT_GREEN}LOAD: ${NC}$1"
   }
 
   # load basic settings
