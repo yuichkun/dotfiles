@@ -33,3 +33,7 @@ json(){
 trash(){
 	mv $1 ~/.Trash
 }
+
+archive_github(){
+	mv $1 ~/Documents/github/
+}
