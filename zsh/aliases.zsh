@@ -10,6 +10,10 @@ alias c='code .'
 alias o='open .'
 alias gc='git clone'
 alias t='tmux'
+alias grep='grep  --color=auto --exclude-dir={.bzr,CVS,.git,.hg,.svn}'
+
+# Global Aliases
+alias -g G='| grep -i'
 
 
 # Functions
