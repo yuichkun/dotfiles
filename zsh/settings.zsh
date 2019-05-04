@@ -24,7 +24,9 @@ HISTFILE=~/.zsh_history
 HISTSIZE=1000000
 SAVEHIST=1000000
 bindkey -v
-bindkey '^R' history-incremental-search-backward
+bindkey '^T'  fzy-file-widget
+bindkey '^R'  fzy-history-widget
+
 # fzy
 bindkey "^N" autosuggest-accept
 
