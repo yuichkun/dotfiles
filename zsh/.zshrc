@@ -14,10 +14,10 @@ function INIT_ZSH(){
   # load env variables
   source $ZSH_ROOT/env.zsh
   # init zsh plugins
-  LOG ZPLUG
+  LOG LOAD_PLUGINS
+  ZPLUG_LOADFILE=$ZSH_ROOT/packages.zsh
   source ~/.zplug/init.zsh
   zplug load --verbose
-  source ~/enhancd/init.sh
   # set tmux lancher
   source $ZSH_ROOT/tmux.zsh
 
