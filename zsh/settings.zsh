@@ -38,7 +38,6 @@ setopt auto_cd
 setopt auto_pushd
 # 重複したディレクトリを追加しない
 setopt pushd_ignore_dups
-setopt correct
 export BG_COLOR=237
 
 # 同時に起動したzshの間でヒストリを共有する
@@ -89,4 +88,5 @@ setopt no_flow_control
 setopt interactive_comments
 
 # fuck を setup
-eval $(thefuck --alias)
+eval $(thefuck --alias fk)
+
