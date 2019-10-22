@@ -87,3 +87,6 @@ setopt no_flow_control
 
 # '#' 以降をコメントとして扱う
 setopt interactive_comments
+
+# fuck を setup
+eval $(thefuck --alias)
