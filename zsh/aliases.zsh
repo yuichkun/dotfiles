@@ -8,18 +8,18 @@ alias la='ls -a'
 alias ll='ls -l'
 alias c='code .'
 alias o='open .'
-alias gc='git clone'
 alias t='tmux'
 alias grep='grep  --color=auto --exclude-dir={.bzr,CVS,.git,.hg,.svn}'
+alias git_cleans_what='git clean -fdxn'
+alias yw='yarn workspace'
 
 # Global Aliases
 alias -g G='| grep -i'
 
-
 # Functions
 
 tl(){
-	tree -L $1 $2 | less;
+	exa -T --color always $1 | less -R
 }
 
 mcd(){
