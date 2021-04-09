@@ -20,6 +20,8 @@ function INIT_ZSH(){
   zplug load --verbose
   # set tmux lancher
   source $ZSH_ROOT/tmux.zsh
+  # load commands
+  source $ZSH_ROOT/commands.zsh
 
   unfunction LOG
 }
