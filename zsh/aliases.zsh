@@ -15,6 +15,7 @@ alias yw='yarn workspace'
 
 # Global Aliases
 alias -g G='| grep -i'
+alias -g N='; notify'
 
 # Functions
 
