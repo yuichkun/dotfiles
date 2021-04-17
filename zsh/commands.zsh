@@ -26,3 +26,15 @@ notify() {
     failure
   fi
 }
+
+tl(){
+	exa -T --color always $1 | less -R
+}
+
+lh(){
+	open "http://localhost:$1";
+}
+
+trash(){
+	mv $1 ~/.Trash
+}

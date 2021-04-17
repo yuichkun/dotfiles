@@ -16,29 +16,3 @@ alias yw='yarn workspace'
 # Global Aliases
 alias -g G='| grep -i'
 alias -g N='; notify'
-
-# Functions
-
-tl(){
-	exa -T --color always $1 | less -R
-}
-
-mcd(){
-	mkdir $1;
-	cd $1;
-}
-
-lh(){
-	open "http://localhost:$1";
-}
-
-json(){
-	cat $1 | jq
-}
-trash(){
-	mv $1 ~/.Trash
-}
-
-archive_github(){
-	mv $1 ~/Documents/github/
-}
