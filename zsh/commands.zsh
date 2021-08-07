@@ -11,6 +11,10 @@ tovim(){
   rm -f "$tmp"
 }
 
+kubectl-exec-bash(){
+  kubectl get po -o name -n $1 | fzy | xargs -t -o -I % kubectl exec -n $1 -it % -- /bin/bash
+}
+
 success() {
   afplay $ZSH_ROOT/success.mp3
 }
