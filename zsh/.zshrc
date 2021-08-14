@@ -18,8 +18,6 @@ function INIT_ZSH(){
   ZPLUG_LOADFILE=$ZSH_ROOT/packages.zsh
   source ~/.zplug/init.zsh
   zplug load --verbose
-  # set tmux lancher
-  source $ZSH_ROOT/tmux.zsh
   # load commands
   source $ZSH_ROOT/commands.zsh
 
