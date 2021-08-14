@@ -23,6 +23,8 @@ function INIT_ZSH(){
   # load commands
   source $ZSH_ROOT/commands.zsh
 
+  eval "$(mcfly init zsh)"
+
   unfunction LOG
 }
 
