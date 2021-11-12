@@ -13,6 +13,7 @@ alias git_cleans_what='git clean -fdxn'
 alias reviews_awaiting_me='gh pr list -S review-requested:yuichkun'
 start_pr_review(){
   reviews_awaiting_me | grep -v 'DRAFT' | fzy | awk '{print $1}' | xargs gh pr checkout --recurse-submodules
+  gh pr view --web
 }
 alias docker_who_died='docker-compose ps | grep -v Up'
 
