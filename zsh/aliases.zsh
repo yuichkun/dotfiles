@@ -10,6 +10,11 @@ alias c='code .'
 alias o='open .'
 alias grep='grep  --color=auto --exclude-dir={.bzr,CVS,.git,.hg,.svn}'
 alias git_cleans_what='git clean -fdxn'
+alias reviews_awaiting_me='gh pr list -S review-requested:yuichkun'
+start_pr_review(){
+  reviews_awaiting_me | fzy | awk '{print $1}' | xargs gh pr checkout --recurse-submodules
+}
+alias docker_who_died='docker-compose ps | grep -v Up'
 
 # Global Aliases
 alias -g G='| grep -i'
