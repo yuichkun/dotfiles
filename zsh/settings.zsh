@@ -1,10 +1,5 @@
 LOG SETTINGS
 
-# wrap brew-file
-if [ -f $(brew --prefix)/etc/brew-wrap ];then
-  source $(brew --prefix)/etc/brew-wrap
-fi
-
 # Prompt
 PROMPT="%F{196}%n %~ %f"
 
