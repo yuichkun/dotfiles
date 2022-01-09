@@ -50,3 +50,10 @@ zen() {
   tmux select-pane -t 0
   tmux split-window -v
 }
+
+slice-video-by-time(){
+  # $1 = video file
+  # $2 = start time
+  # $3 = end time
+  ffmpeg -ss $2 -i $1 -to $3 -c copy output.mp4
+}
