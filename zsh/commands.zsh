@@ -23,6 +23,13 @@ failure() {
   afplay $ZSH_ROOT/failure.mp3
 }
 
+co() {
+  local branches branch
+  branches=$(git branch -a) &&
+  branch=$(echo "$branches" | fzf +s +m -e) &&
+  git checkout $(echo "$branch" | sed "s:.* remotes/origin/::" | sed "s:.* ::")
+}
+
 notify() {
   if [ "$?" = 0 ]; then
     success
