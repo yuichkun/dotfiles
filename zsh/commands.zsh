@@ -12,7 +12,7 @@ tovim(){
 }
 
 kubectl-exec-bash(){
-  kubectl get po -o name -n $1 | fzy | xargs -t -o -I % kubectl exec -n $1 -it % -- /bin/bash
+  kubectl get po --field-selector=status.phase=Running -o name -n $1 | fzy | xargs -t -o -I % kubectl exec -n $1 -it % -- /bin/bash
 }
 
 success() {
