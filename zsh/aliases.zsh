@@ -13,11 +13,11 @@ alias git_cleans_what='git clean -fdxn'
 alias reviews_awaiting_me='gh pr list -S review-requested:yuichkun'
 alias my_pr=' gh pr list --author "@me"'
 start_pr_review(){
-  reviews_awaiting_me | grep -v 'DRAFT' | fzy | awk '{print $1}' | xargs gh pr checkout --recurse-submodules
+  reviews_awaiting_me | grep -v 'DRAFT' | fzy | awk '{print $1}' | xargs gh pr checkout --recurse-submodules --force
   gh pr view --web
 }
 checkout_to_my_pr(){
-  my_pr | fzy | awk '{print $1}' | xargs gh pr checkout --recurse-submodules
+  my_pr | fzy | awk '{print $1}' | xargs gh pr checkout --recurse-submodules --force
 }
 alias docker_who_died='docker-compose ps | grep -v Up'
 
