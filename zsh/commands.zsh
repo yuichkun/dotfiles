@@ -64,3 +64,7 @@ slice-video-by-time(){
   # $3 = end time
   ffmpeg -ss $2 -i $1 -to $3 -c copy output.mp4
 }
+
+qr(){
+  qrencode -t ANSI $1
+}
