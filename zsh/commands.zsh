@@ -39,7 +39,7 @@ notify() {
 }
 
 tl(){
-	exa -T --color always $1 | less -R
+	eza -T --color always $1 | less -R
 }
 
 lh(){
