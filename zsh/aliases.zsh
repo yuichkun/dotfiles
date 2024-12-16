@@ -6,7 +6,7 @@ alias ls='ls -GF'
 ## Shorthands 
 alias la='ls -a'
 alias ll='ls -l'
-alias c='code .'
+alias c='cursor .'
 alias o='open .'
 alias grep='grep  --color=auto --exclude-dir={.bzr,CVS,.git,.hg,.svn}'
 alias git_cleans_what='git clean -fdxn'
