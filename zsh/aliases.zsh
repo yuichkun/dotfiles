@@ -23,3 +23,29 @@ alias docker_who_died='docker-compose ps | grep -v Up'
 # Global Aliases
 alias -g G='| grep -i'
 alias -g N='; notify'
+
+function create-three-project() {
+    if [ -z "$1" ]; then
+        echo "Error: Project name is required"
+        echo "Usage: create-three-project <project-name>"
+        return 1
+    fi
+    
+    npm create vite@latest "$1" -- --template vanilla-ts
+    cd "$1"
+    npm install three
+    npm install -D @types/three
+}
+
+function create-r3f-project() {
+    if [ -z "$1" ]; then
+        echo "Error: Project name is required"
+        echo "Usage: create-three-project <project-name>"
+        return 1
+    fi
+    
+    npm create vite@latest "$1" -- --template react-ts
+    cd "$1"
+    npm install three @react-three/fiber @react-three/drei
+    npm install -D @types/three
+}
