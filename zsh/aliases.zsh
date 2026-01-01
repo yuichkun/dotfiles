@@ -6,14 +6,16 @@ alias ls='ls -GF'
 ## Shorthands 
 alias la='ls -a'
 alias ll='ls -l'
-alias c='cursor .'
+alias c='code .'
 alias o='open .'
+alias cl='claude'
+alias clp='claude -p'
+alias gu='gitui'
 alias grep='grep  --color=auto --exclude-dir={.bzr,CVS,.git,.hg,.svn}'
 alias git_cleans_what='git clean -fdxn'
 alias reviews_awaiting_me='gh pr list -S review-requested:yuichkun'
 start_pr_review(){
   reviews_awaiting_me | grep -v 'DRAFT' | fzy | awk '{print $1}' | xargs gh pr checkout --recurse-submodules --force
-  gh pr view --web
 }
 my_pr(){
   gh pr list --author "@me" | fzy | awk '{print $1}' | xargs gh pr checkout --recurse-submodules --force
