@@ -29,17 +29,25 @@ alias -g N='; notify'
 opencode() {
     docker run --rm -it \
         -v "$(pwd):/workspace" \
-        -v opencode-data:/root/.local \
-        -e HOME=/root \
+        -v opencode-home:/root \
         -w /workspace \
         -p 4096:4096 \
-        ghcr.io/anomalyco/opencode --port 4096 --hostname 0.0.0.0 "$@"
+        my-opencode --port 4096 --hostname 0.0.0.0 "$@"
 }
 
 alias oc='opencode'
 
-opencode-update() {
-    docker pull ghcr.io/anomalyco/opencode
+opencode-shell() {
+    docker run --rm -it \
+        -v "$(pwd):/workspace" \
+        -v opencode-home:/root \
+        -w /workspace \
+        --entrypoint /bin/bash \
+        my-opencode
+}
+
+opencode-build() {
+    docker build -t my-opencode ~/dotfiles/docker/opencode/
 }
 
 function create-three-project() {
