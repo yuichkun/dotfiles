@@ -27,12 +27,28 @@ alias -g G='| grep -i'
 alias -g N='; notify'
 
 opencode() {
+    local port=4096
+    local args=()
+    
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --port)
+                port="$2"
+                shift 2
+                ;;
+            *)
+                args+=("$1")
+                shift
+                ;;
+        esac
+    done
+    
     docker run --rm -it \
         -v "$(pwd):/workspace" \
         -v opencode-home:/root \
         -w /workspace \
-        -p 4096:4096 \
-        my-opencode --port 4096 --hostname 0.0.0.0 "$@"
+        -p "${port}:${port}" \
+        my-opencode --port "${port}" --hostname 0.0.0.0 "${args[@]}"
 }
 
 alias oc='opencode'
