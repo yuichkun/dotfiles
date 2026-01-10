@@ -36,6 +36,8 @@ opencode() {
         ghcr.io/anomalyco/opencode --port 4096 --hostname 0.0.0.0 "$@"
 }
 
+alias oc='opencode'
+
 opencode-update() {
     docker pull ghcr.io/anomalyco/opencode
 }
