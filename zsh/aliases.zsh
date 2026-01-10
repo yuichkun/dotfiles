@@ -26,6 +26,20 @@ alias docker_who_died='docker-compose ps | grep -v Up'
 alias -g G='| grep -i'
 alias -g N='; notify'
 
+opencode() {
+    docker run --rm -it \
+        -v "$(pwd):/workspace" \
+        -v opencode-data:/root/.local \
+        -e HOME=/root \
+        -w /workspace \
+        -p 4096:4096 \
+        ghcr.io/anomalyco/opencode --port 4096 --hostname 0.0.0.0 "$@"
+}
+
+opencode-update() {
+    docker pull ghcr.io/anomalyco/opencode
+}
+
 function create-three-project() {
     if [ -z "$1" ]; then
         echo "Error: Project name is required"
