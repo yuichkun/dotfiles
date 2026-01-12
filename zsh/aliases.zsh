@@ -43,11 +43,12 @@ opencode() {
         esac
     done
     
-    docker run --rm -it \
+    docker run --rm --init -it \
         -v "$(pwd):/workspace" \
         -v opencode-home:/root \
         -w /workspace \
         -p "${port}:${port}" \
+        --detach-keys="ctrl-@" \
         my-opencode --port "${port}" --hostname 0.0.0.0 "${args[@]}"
 }
 
