@@ -68,6 +68,10 @@ opencode-build() {
     docker build -t my-opencode ~/dotfiles/docker/opencode/
 }
 
+opencode-clean() {
+    docker volume rm opencode-home
+}
+
 function create-three-project() {
     if [ -z "$1" ]; then
         echo "Error: Project name is required"
