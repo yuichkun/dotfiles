@@ -27,6 +27,10 @@ RUN apt-get update && apt-get install -y python3 python3-venv \
 RUN curl -fsSL https://opencode.ai/install | bash -s -- --no-modify-path \
     && mv /root/.opencode/bin/opencode /usr/local/bin/opencode
 
+# Dockerfileのハッシュをバージョンとして記録（ボリューム同期判定用）
+COPY Dockerfile /tmp/Dockerfile
+RUN sha256sum /tmp/Dockerfile | cut -c1-12 > /root/.image-version && rm /tmp/Dockerfile
+
 # /root の初期状態を保存（ボリュームマウント時の初期化用）
 RUN cp -a /root /root-default
 
