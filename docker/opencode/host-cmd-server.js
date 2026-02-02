@@ -1,18 +1,18 @@
 #!/usr/bin/env node
 
-const net = require("net");
+const http = require("http");
 const fs = require("fs");
 const path = require("path");
-const { execFile } = require("child_process");
+const { spawn } = require("child_process");
 
-// Parse arguments: host-cmd-server <socket-path>
+// Parse arguments: host-cmd-server <port>
 const args = process.argv.slice(2);
 if (args.length === 0) {
-  console.error("Usage: host-cmd-server <socket-path>");
+  console.error("Usage: host-cmd-server <port>");
   process.exit(1);
 }
 
-const socketPath = args[0];
+const port = parseInt(args[0], 10);
 const workspace = process.cwd();
 
 // Generate project-key from workspace path for whitelist lookup
@@ -34,7 +34,7 @@ try {
 } catch (err) {
   if (err.code === "ENOENT") {
     console.log(
-      `No whitelist found at ${whitelistPath}, all commands will be rejected`,
+      `No whitelist found at ${whitelistPath}, all commands will be rejected`
     );
   } else {
     console.error(`Error loading whitelist: ${err.message}`);
@@ -59,88 +59,101 @@ function isAllowed(commandArray) {
   return false;
 }
 
-// Remove existing socket file
-if (fs.existsSync(socketPath)) {
-  fs.unlinkSync(socketPath);
+function sendJson(res, statusCode, data) {
+  const body = JSON.stringify(data);
+  res.writeHead(statusCode, {
+    "Content-Type": "application/json",
+    "Content-Length": Buffer.byteLength(body),
+  });
+  res.end(body);
 }
 
-const server = net.createServer((socket) => {
-  let data = "";
+const server = http.createServer((req, res) => {
+  if (req.method !== "POST" || req.url !== "/exec") {
+    sendJson(res, 404, { success: false, error: "Not found" });
+    return;
+  }
 
-  socket.on("data", (chunk) => {
-    data += chunk.toString();
+  let body = "";
+  req.on("data", (chunk) => {
+    body += chunk.toString();
   });
 
-  socket.on("end", () => {
+  req.on("end", () => {
+    let request;
     try {
-      const request = JSON.parse(data);
-      const { command } = request;
-
-      if (!Array.isArray(command) || command.length === 0) {
-        socket.write(
-          JSON.stringify({
-            success: false,
-            error: "Invalid command format",
-          }),
-        );
-        socket.end();
-        return;
-      }
-
-      if (!isAllowed(command)) {
-        socket.write(
-          JSON.stringify({
-            success: false,
-            error: `Command not whitelisted: ${command.join(" ")}`,
-          }),
-        );
-        socket.end();
-        return;
-      }
-
-      const [cmd, ...cmdArgs] = command;
-      execFile(cmd, cmdArgs, { cwd: workspace }, (err, stdout, stderr) => {
-        socket.write(
-          JSON.stringify({
-            success: !err,
-            exitCode: err ? err.code : 0,
-            stdout,
-            stderr,
-            error: err ? err.message : null,
-          }),
-        );
-        socket.end();
-      });
+      request = JSON.parse(body);
     } catch (err) {
-      socket.write(
-        JSON.stringify({
-          success: false,
-          error: `Parse error: ${err.message}`,
-        }),
-      );
-      socket.end();
+      sendJson(res, 400, { success: false, error: `Invalid JSON: ${err.message}` });
+      return;
     }
+
+    const { command } = request;
+
+    if (!Array.isArray(command) || command.length === 0) {
+      sendJson(res, 400, { success: false, error: "Invalid command format" });
+      return;
+    }
+
+    if (!isAllowed(command)) {
+      sendJson(res, 403, {
+        success: false,
+        error: `Command not whitelisted: ${command.join(" ")}. Allowed: ${whitelist.commands.join(", ") || "(none)"}`,
+      });
+      return;
+    }
+
+    const [cmd, ...cmdArgs] = command;
+
+    const child = spawn(cmd, cmdArgs, {
+      cwd: workspace,
+      env: process.env,
+    });
+
+    const stdoutChunks = [];
+    const stderrChunks = [];
+
+    child.stdout.on("data", (chunk) => {
+      stdoutChunks.push(chunk);
+    });
+
+    child.stderr.on("data", (chunk) => {
+      stderrChunks.push(chunk);
+    });
+
+    child.on("error", (err) => {
+      sendJson(res, 500, {
+        success: false,
+        exitCode: 1,
+        stdout: Buffer.concat(stdoutChunks).toString("utf8"),
+        stderr: Buffer.concat(stderrChunks).toString("utf8"),
+        error: err.message,
+      });
+    });
+
+    child.on("close", (exitCode) => {
+      sendJson(res, 200, {
+        success: exitCode === 0,
+        exitCode: exitCode ?? 1,
+        stdout: Buffer.concat(stdoutChunks).toString("utf8"),
+        stderr: Buffer.concat(stderrChunks).toString("utf8"),
+        error: null,
+      });
+    });
   });
 });
 
-server.listen(socketPath, () => {
-  console.log(`host-cmd-server listening on ${socketPath}`);
+server.listen(port, "127.0.0.1", () => {
+  console.log(`host-cmd-server listening on http://127.0.0.1:${port}`);
   console.log(`Workspace: ${workspace}`);
 });
 
-// Cleanup on exit
 process.on("SIGINT", () => {
   server.close();
-  if (fs.existsSync(socketPath)) {
-    fs.unlinkSync(socketPath);
-  }
   process.exit(0);
 });
 
 process.on("SIGTERM", () => {
   server.close();
-  if (fs.existsSync(socketPath)) {
-    fs.unlinkSync(socketPath);
-  }
   process.exit(0);
 });

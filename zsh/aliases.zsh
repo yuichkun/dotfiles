@@ -29,7 +29,7 @@ alias -g N='; notify'
 opencode() {
     local port=4096
     local args=()
-    local host_cmd_sock="/tmp/host-cmd-$$.sock"
+    local host_cmd_port=$((49152 + RANDOM % 16384))
     local host_cmd_pid=""
 
     while [[ $# -gt 0 ]]; do
@@ -46,18 +46,17 @@ opencode() {
     done
 
     # Start host-cmd-server
-    node ~/dotfiles/docker/opencode/host-cmd-server.js "$host_cmd_sock" &
+    node ~/dotfiles/docker/opencode/host-cmd-server.js "$host_cmd_port" &
     host_cmd_pid=$!
     sleep 0.5
 
     # Cleanup on exit
-    trap "kill $host_cmd_pid 2>/dev/null; rm -f $host_cmd_sock" EXIT
+    trap "kill $host_cmd_pid 2>/dev/null" EXIT
 
     docker run --rm --init -it \
         -v "$(pwd):/workspace" \
         -v opencode-home:/root \
-        -v "$host_cmd_sock:/tmp/host-cmd.sock" \
-        -e HOST_CMD_SOCK=/tmp/host-cmd.sock \
+        -e HOST_CMD_PORT="$host_cmd_port" \
         -w /workspace \
         -p "${port}:${port}" \
         --detach-keys="ctrl-@" \
@@ -65,29 +64,27 @@ opencode() {
 
     # Cleanup
     kill $host_cmd_pid 2>/dev/null
-    rm -f "$host_cmd_sock"
     trap - EXIT
 }
 
 alias oc='opencode'
 
 opencode-shell() {
-    local host_cmd_sock="/tmp/host-cmd-$$.sock"
+    local host_cmd_port=$((49152 + RANDOM % 16384))
     local host_cmd_pid=""
 
     # Start host-cmd-server
-    node ~/dotfiles/docker/opencode/host-cmd-server.js "$host_cmd_sock" &
+    node ~/dotfiles/docker/opencode/host-cmd-server.js "$host_cmd_port" &
     host_cmd_pid=$!
     sleep 0.5
 
     # Cleanup on exit
-    trap "kill $host_cmd_pid 2>/dev/null; rm -f $host_cmd_sock" EXIT
+    trap "kill $host_cmd_pid 2>/dev/null" EXIT
 
     docker run --rm -it \
         -v "$(pwd):/workspace" \
         -v opencode-home:/root \
-        -v "$host_cmd_sock:/tmp/host-cmd.sock" \
-        -e HOST_CMD_SOCK=/tmp/host-cmd.sock \
+        -e HOST_CMD_PORT="$host_cmd_port" \
         -w /workspace \
         -p 1455:1455 \
         --detach-keys="ctrl-@" \
@@ -96,7 +93,6 @@ opencode-shell() {
 
     # Cleanup
     kill $host_cmd_pid 2>/dev/null
-    rm -f "$host_cmd_sock"
     trap - EXIT
 }
 

@@ -1,57 +1,66 @@
-#!/bin/bash
+#!/usr/bin/env node
 
-if [ -z "$HOST_CMD_SOCK" ]; then
-  echo "Error: HOST_CMD_SOCK environment variable not set" >&2
-  exit 1
-fi
+const http = require("http");
 
-if [ $# -eq 0 ]; then
-  echo "Usage: host-cmd <command> [args...]" >&2
-  exit 1
-fi
+const port = process.env.HOST_CMD_PORT;
+if (!port) {
+  console.error("Error: HOST_CMD_PORT environment variable not set");
+  process.exit(1);
+}
 
-# Build JSON array from arguments
-json_array="["
-first=true
-for arg in "$@"; do
-  escaped=$(echo "$arg" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g')
-  if [ "$first" = true ]; then
-    json_array="${json_array}\"${escaped}\""
-    first=false
-  else
-    json_array="${json_array},\"${escaped}\""
-  fi
-done
-json_array="${json_array}]"
+const args = process.argv.slice(2);
+if (args.length === 0) {
+  console.error("Usage: host-cmd <command> [args...]");
+  process.exit(1);
+}
 
-request="{\"command\":${json_array}}"
+const requestBody = JSON.stringify({ command: args });
 
-response=$(echo "$request" | nc -U "$HOST_CMD_SOCK")
+const options = {
+  hostname: "host.docker.internal",
+  port: parseInt(port, 10),
+  path: "/exec",
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "Content-Length": Buffer.byteLength(requestBody),
+  },
+};
 
-if [ -z "$response" ]; then
-  echo "Error: No response from host-cmd-server" >&2
-  exit 1
-fi
+const req = http.request(options, (res) => {
+  let data = "";
 
-success=$(echo "$response" | grep -o '"success":[^,}]*' | cut -d: -f2)
-stdout=$(echo "$response" | grep -o '"stdout":"[^"]*"' | sed 's/"stdout":"//;s/"$//' | sed 's/\\n/\n/g' | sed 's/\\t/\t/g')
-stderr=$(echo "$response" | grep -o '"stderr":"[^"]*"' | sed 's/"stderr":"//;s/"$//' | sed 's/\\n/\n/g' | sed 's/\\t/\t/g')
-error=$(echo "$response" | grep -o '"error":"[^"]*"' | sed 's/"error":"//;s/"$//')
-exit_code=$(echo "$response" | grep -o '"exitCode":[0-9]*' | cut -d: -f2)
+  res.on("data", (chunk) => {
+    data += chunk;
+  });
 
-if [ -n "$stdout" ]; then
-  echo "$stdout"
-fi
+  res.on("end", () => {
+    try {
+      const response = JSON.parse(data);
 
-if [ -n "$stderr" ]; then
-  echo "$stderr" >&2
-fi
+      if (response.stdout) {
+        process.stdout.write(response.stdout);
+      }
+      if (response.stderr) {
+        process.stderr.write(response.stderr);
+      }
+      if (!response.success && response.error) {
+        console.error(`Error: ${response.error}`);
+      }
 
-if [ "$success" = "false" ]; then
-  if [ -n "$error" ]; then
-    echo "Error: $error" >&2
-  fi
-  exit 1
-fi
+      process.exit(response.exitCode ?? (response.success ? 0 : 1));
+    } catch (err) {
+      console.error(`Failed to parse response: ${err.message}`);
+      console.error(`Raw response: ${data}`);
+      process.exit(1);
+    }
+  });
+});
 
-exit ${exit_code:-0}
+req.on("error", (err) => {
+  console.error(`Request failed: ${err.message}`);
+  process.exit(1);
+});
+
+req.write(requestBody);
+req.end();
