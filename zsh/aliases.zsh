@@ -59,6 +59,7 @@ opencode-shell() {
         -v "$(pwd):/workspace" \
         -v opencode-home:/root \
         -w /workspace \
+        -p 1455:1455 \
         --detach-keys="ctrl-@" \
         --entrypoint /bin/bash \
         my-opencode
