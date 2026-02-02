@@ -1,0 +1,57 @@
+#!/bin/bash
+
+if [ -z "$HOST_CMD_SOCK" ]; then
+  echo "Error: HOST_CMD_SOCK environment variable not set" >&2
+  exit 1
+fi
+
+if [ $# -eq 0 ]; then
+  echo "Usage: host-cmd <command> [args...]" >&2
+  exit 1
+fi
+
+# Build JSON array from arguments
+json_array="["
+first=true
+for arg in "$@"; do
+  escaped=$(echo "$arg" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g')
+  if [ "$first" = true ]; then
+    json_array="${json_array}\"${escaped}\""
+    first=false
+  else
+    json_array="${json_array},\"${escaped}\""
+  fi
+done
+json_array="${json_array}]"
+
+request="{\"command\":${json_array}}"
+
+response=$(echo "$request" | nc -U "$HOST_CMD_SOCK")
+
+if [ -z "$response" ]; then
+  echo "Error: No response from host-cmd-server" >&2
+  exit 1
+fi
+
+success=$(echo "$response" | grep -o '"success":[^,}]*' | cut -d: -f2)
+stdout=$(echo "$response" | grep -o '"stdout":"[^"]*"' | sed 's/"stdout":"//;s/"$//' | sed 's/\\n/\n/g' | sed 's/\\t/\t/g')
+stderr=$(echo "$response" | grep -o '"stderr":"[^"]*"' | sed 's/"stderr":"//;s/"$//' | sed 's/\\n/\n/g' | sed 's/\\t/\t/g')
+error=$(echo "$response" | grep -o '"error":"[^"]*"' | sed 's/"error":"//;s/"$//')
+exit_code=$(echo "$response" | grep -o '"exitCode":[0-9]*' | cut -d: -f2)
+
+if [ -n "$stdout" ]; then
+  echo "$stdout"
+fi
+
+if [ -n "$stderr" ]; then
+  echo "$stderr" >&2
+fi
+
+if [ "$success" = "false" ]; then
+  if [ -n "$error" ]; then
+    echo "Error: $error" >&2
+  fi
+  exit 1
+fi
+
+exit ${exit_code:-0}

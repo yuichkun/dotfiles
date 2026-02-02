@@ -29,7 +29,9 @@ alias -g N='; notify'
 opencode() {
     local port=4096
     local args=()
-    
+    local host_cmd_sock="/tmp/host-cmd-$$.sock"
+    local host_cmd_pid=""
+
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --port)
@@ -42,27 +44,60 @@ opencode() {
                 ;;
         esac
     done
-    
+
+    # Start host-cmd-server
+    node ~/dotfiles/docker/opencode/host-cmd-server.js "$host_cmd_sock" &
+    host_cmd_pid=$!
+    sleep 0.5
+
+    # Cleanup on exit
+    trap "kill $host_cmd_pid 2>/dev/null; rm -f $host_cmd_sock" EXIT
+
     docker run --rm --init -it \
         -v "$(pwd):/workspace" \
         -v opencode-home:/root \
+        -v "$host_cmd_sock:/tmp/host-cmd.sock" \
+        -e HOST_CMD_SOCK=/tmp/host-cmd.sock \
         -w /workspace \
         -p "${port}:${port}" \
         --detach-keys="ctrl-@" \
         my-opencode --port "${port}" --hostname 0.0.0.0 "${args[@]}"
+
+    # Cleanup
+    kill $host_cmd_pid 2>/dev/null
+    rm -f "$host_cmd_sock"
+    trap - EXIT
 }
 
 alias oc='opencode'
 
 opencode-shell() {
+    local host_cmd_sock="/tmp/host-cmd-$$.sock"
+    local host_cmd_pid=""
+
+    # Start host-cmd-server
+    node ~/dotfiles/docker/opencode/host-cmd-server.js "$host_cmd_sock" &
+    host_cmd_pid=$!
+    sleep 0.5
+
+    # Cleanup on exit
+    trap "kill $host_cmd_pid 2>/dev/null; rm -f $host_cmd_sock" EXIT
+
     docker run --rm -it \
         -v "$(pwd):/workspace" \
         -v opencode-home:/root \
+        -v "$host_cmd_sock:/tmp/host-cmd.sock" \
+        -e HOST_CMD_SOCK=/tmp/host-cmd.sock \
         -w /workspace \
         -p 1455:1455 \
         --detach-keys="ctrl-@" \
         --entrypoint /bin/bash \
         my-opencode
+
+    # Cleanup
+    kill $host_cmd_pid 2>/dev/null
+    rm -f "$host_cmd_sock"
+    trap - EXIT
 }
 
 opencode-build() {

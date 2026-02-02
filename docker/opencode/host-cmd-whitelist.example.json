@@ -1,0 +1,12 @@
+{
+  "commands": [
+    "npm run *",
+    "npm test",
+    "npm install",
+    "git status",
+    "git diff",
+    "git log *",
+    "docker-compose ps",
+    "docker-compose logs *"
+  ]
+}
