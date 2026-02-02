@@ -24,20 +24,18 @@ const projectKey = toProjectKey(workspace);
 const configDir = path.join(process.env.HOME, ".config", "opencode-host");
 const whitelistPath = path.join(configDir, `${projectKey}.json`);
 
-// Load whitelist
-let whitelist = { commands: [] };
-try {
-  const data = fs.readFileSync(whitelistPath, "utf8");
-  whitelist = JSON.parse(data);
-  console.log(`Loaded whitelist from ${whitelistPath}`);
-  console.log(`Allowed patterns: ${whitelist.commands.join(", ")}`);
-} catch (err) {
-  if (err.code === "ENOENT") {
-    console.log(
-      `No whitelist found at ${whitelistPath}, all commands will be rejected`
-    );
-  } else {
-    console.error(`Error loading whitelist: ${err.message}`);
+console.log(`Whitelist path: ${whitelistPath}`);
+
+// Load whitelist (called on each request)
+function loadWhitelist() {
+  try {
+    const data = fs.readFileSync(whitelistPath, "utf8");
+    return JSON.parse(data);
+  } catch (err) {
+    if (err.code !== "ENOENT") {
+      console.error(`Error loading whitelist: ${err.message}`);
+    }
+    return { commands: [] };
   }
 }
 
@@ -49,7 +47,7 @@ function globMatch(pattern, str) {
 }
 
 // Check if command matches whitelist
-function isAllowed(commandArray) {
+function isAllowed(commandArray, whitelist) {
   const commandStr = commandArray.join(" ");
   for (const pattern of whitelist.commands) {
     if (globMatch(pattern, commandStr)) {
@@ -95,7 +93,9 @@ const server = http.createServer((req, res) => {
       return;
     }
 
-    if (!isAllowed(command)) {
+    const whitelist = loadWhitelist();
+
+    if (!isAllowed(command, whitelist)) {
       sendJson(res, 403, {
         success: false,
         error: `Command not whitelisted: ${command.join(" ")}. Allowed: ${whitelist.commands.join(", ") || "(none)"}`,
