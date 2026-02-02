@@ -108,6 +108,10 @@ opencode-clean() {
     docker volume rm opencode-home
 }
 
+opencode-whitelist-path() {
+    echo "$HOME/.config/opencode-host/$(pwd | sed 's/^\///' | tr '/' '-').json"
+}
+
 function create-three-project() {
     if [ -z "$1" ]; then
         echo "Error: Project name is required"
