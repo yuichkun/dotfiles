@@ -25,7 +25,7 @@ RUN apt-get update && apt-get install -y python3 python3-venv \
 
 # OpenCode
 RUN curl -fsSL https://opencode.ai/install | bash -s -- --no-modify-path \
-    && mv /root/.opencode/bin/opencode /usr/local/bin/opencode
+    && ln -s /root/.opencode/bin/opencode /usr/local/bin/opencode
 
 # host-cmd client
 COPY host-cmd /usr/local/bin/host-cmd
