@@ -25,8 +25,6 @@ bindkey '^R'  fzy-history-widget
 # fzy
 bindkey "^N" autosuggest-accept
 
-autoload -Uz compinit
-compinit
 autoload -Uz colors
 colors
 setopt auto_cd

@@ -1,0 +1,2 @@
+# antidote が plugins.txt から自動生成する static file（マシン固有のフルパスを含む）
+zsh/plugins.zsh

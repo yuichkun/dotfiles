@@ -1,0 +1,6 @@
+zsh-users/zsh-completions kind:fpath path:src
+zsh-users/zsh-autosuggestions
+aperezdc/zsh-fzy
+b4b4r07/enhancd path:init.sh kind:defer
+simonwhitaker/gibo kind:path
+zsh-users/zsh-syntax-highlighting kind:defer
