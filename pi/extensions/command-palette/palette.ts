@@ -17,6 +17,7 @@ import type {
 	CommandPaletteRegistry,
 } from "./registry.ts";
 
+const MIN_VISIBLE_ACTION_ROWS = 5;
 const MAX_VISIBLE_ACTIONS = 8;
 
 function getSearchText(action: CommandPaletteAction): string {
@@ -125,6 +126,7 @@ class CommandPaletteComponent implements Component, Focusable {
 		lines.push(this.renderRow(` ${inputLine}`, innerWidth));
 		lines.push(this.renderSeparator(innerWidth));
 
+		let renderedActionRows = 0;
 		if (this.filteredActions.length === 0) {
 			const message =
 				this.actions.length === 0
@@ -136,6 +138,7 @@ class CommandPaletteComponent implements Component, Focusable {
 					innerWidth,
 				),
 			);
+			renderedActionRows++;
 		} else {
 			const { start, end } = this.getVisibleRange();
 			for (let index = start; index < end; index++) {
@@ -158,7 +161,12 @@ class CommandPaletteComponent implements Component, Focusable {
 						selected,
 					),
 				);
+				renderedActionRows++;
 			}
+		}
+		while (renderedActionRows < MIN_VISIBLE_ACTION_ROWS) {
+			lines.push(this.renderRow("", innerWidth));
+			renderedActionRows++;
 		}
 
 		lines.push(this.renderSeparator(innerWidth));
