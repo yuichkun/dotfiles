@@ -1,25 +1,17 @@
-import type {
-	ExtensionContext,
-	KeybindingsManager,
-	Theme,
-} from "@earendil-works/pi-coding-agent";
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
 	fuzzyFilter,
 	Input,
-	Key,
 	matchesKey,
 	truncateToWidth,
-	visibleWidth,
-	type Component,
-	type Focusable,
-	type TUI,
 } from "@earendil-works/pi-tui";
+import { BaseModal, showModal, type ModalContext } from "../shared/modal.ts";
+import { ModalFrame } from "../shared/modal-frame.ts";
 import type {
 	CommandPaletteAction,
 	CommandPaletteRegistry,
 } from "./registry.ts";
-
-export const COMMAND_PALETTE_SHORTCUT = Key.ctrl("o");
+import { COMMAND_PALETTE_SHORTCUT } from "./shortcut.ts";
 
 const MIN_VISIBLE_ACTION_ROWS = 5;
 const MAX_VISIBLE_ACTIONS = 8;
@@ -35,47 +27,31 @@ function getSearchText(action: CommandPaletteAction): string {
 		.join(" ");
 }
 
-class CommandPaletteComponent implements Component, Focusable {
+class CommandPaletteComponent extends BaseModal<string> {
 	private readonly input = new Input();
 	private readonly actions: readonly CommandPaletteAction[];
-	private readonly theme: Theme;
-	private readonly keybindings: KeybindingsManager;
-	private readonly tui: TUI;
-	private readonly done: (actionId: string | undefined) => void;
 	private filteredActions: CommandPaletteAction[];
 	private selectedIndex = 0;
-	private _focused = false;
 
 	constructor(
 		actions: readonly CommandPaletteAction[],
-		theme: Theme,
-		keybindings: KeybindingsManager,
-		tui: TUI,
-		done: (actionId: string | undefined) => void,
+		context: ModalContext<string>,
 	) {
+		super(context);
 		this.actions = actions;
 		this.filteredActions = [...actions];
-		this.theme = theme;
-		this.keybindings = keybindings;
-		this.tui = tui;
-		this.done = done;
 	}
 
-	get focused(): boolean {
-		return this._focused;
+	protected override onFocusChange(focused: boolean): void {
+		this.input.focused = focused;
 	}
 
-	set focused(value: boolean) {
-		this._focused = value;
-		this.input.focused = value;
-	}
-
-	handleInput(data: string): void {
+	override handleInput(data: string): void {
 		if (
 			matchesKey(data, COMMAND_PALETTE_SHORTCUT) ||
-			this.keybindings.matches(data, "tui.select.cancel")
+			this.isCancelInput(data)
 		) {
-			this.done(undefined);
+			this.cancel();
 			return;
 		}
 		if (this.keybindings.matches(data, "tui.select.up")) {
@@ -96,7 +72,7 @@ class CommandPaletteComponent implements Component, Focusable {
 		}
 		if (this.keybindings.matches(data, "tui.select.confirm")) {
 			const action = this.filteredActions[this.selectedIndex];
-			if (action) this.done(action.id);
+			if (action) this.close(action.id);
 			return;
 		}
 
@@ -105,33 +81,22 @@ class CommandPaletteComponent implements Component, Focusable {
 		if (this.input.getValue() !== previousQuery) {
 			this.updateFilter();
 		}
-		this.tui.requestRender();
+		this.requestRender();
 	}
 
-	invalidate(): void {
+	override invalidate(): void {
 		this.input.invalidate();
 	}
 
-	render(width: number): string[] {
+	override render(width: number): string[] {
 		if (width < 4) return [truncateToWidth("Command Palette", width, "")];
 
-		const innerWidth = width - 2;
-		const lines: string[] = [];
-		const title = "─ Command Palette ";
-		const titleFill = "─".repeat(
-			Math.max(0, innerWidth - visibleWidth(title)),
-		);
-
-		lines.push(
-			this.theme.fg("borderAccent", "╭") +
-				this.theme.fg("accent", this.theme.bold(title)) +
-				this.theme.fg("borderAccent", `${titleFill}╮`),
-		);
-
-		const inputWidth = Math.max(1, innerWidth - 2);
+		const frame = new ModalFrame(this.theme, width);
+		const lines: string[] = [frame.top("Command Palette")];
+		const inputWidth = Math.max(1, frame.innerWidth - 2);
 		const inputLine = this.input.render(inputWidth)[0] ?? "";
-		lines.push(this.renderRow(` ${inputLine}`, innerWidth));
-		lines.push(this.renderSeparator(innerWidth));
+		lines.push(frame.row(` ${inputLine}`));
+		lines.push(frame.separator());
 
 		let renderedActionRows = 0;
 		if (this.filteredActions.length === 0) {
@@ -139,12 +104,7 @@ class CommandPaletteComponent implements Component, Focusable {
 				this.actions.length === 0
 					? "No actions registered yet"
 					: "No matching actions";
-			lines.push(
-				this.renderRow(
-					`  ${this.theme.fg("dim", message)}`,
-					innerWidth,
-				),
-			);
+			lines.push(frame.row(`  ${this.theme.fg("dim", message)}`));
 			renderedActionRows++;
 		} else {
 			const { start, end } = this.getVisibleRange();
@@ -162,31 +122,24 @@ class CommandPaletteComponent implements Component, Focusable {
 					: "";
 
 				lines.push(
-					this.renderRow(
-						prefix + titleText + description,
-						innerWidth,
-						selected,
-					),
+					frame.row(prefix + titleText + description, { selected }),
 				);
 				renderedActionRows++;
 			}
 		}
 		while (renderedActionRows < MIN_VISIBLE_ACTION_ROWS) {
-			lines.push(this.renderRow("", innerWidth));
+			lines.push(frame.row());
 			renderedActionRows++;
 		}
 
-		lines.push(this.renderSeparator(innerWidth));
+		lines.push(frame.separator());
 		const count = `${this.filteredActions.length}/${this.actions.length}`;
 		lines.push(
-			this.renderRow(
+			frame.row(
 				` ${this.theme.fg("dim", `↑↓ navigate  Enter run  Esc close  ·  ${count}`)}`,
-				innerWidth,
 			),
 		);
-		lines.push(
-			this.theme.fg("borderAccent", `╰${"─".repeat(innerWidth)}╯`),
-		);
+		lines.push(frame.bottom());
 
 		return lines;
 	}
@@ -212,7 +165,7 @@ class CommandPaletteComponent implements Component, Focusable {
 				Math.min(this.selectedIndex + delta, count - 1),
 			);
 		}
-		this.tui.requestRender();
+		this.requestRender();
 	}
 
 	private getVisibleRange(): { start: number; end: number } {
@@ -229,58 +182,23 @@ class CommandPaletteComponent implements Component, Focusable {
 			end: Math.min(start + MAX_VISIBLE_ACTIONS, count),
 		};
 	}
-
-	private renderRow(
-		content: string,
-		innerWidth: number,
-		selected = false,
-	): string {
-		const truncated = truncateToWidth(content, innerWidth, "");
-		const padding = " ".repeat(
-			Math.max(0, innerWidth - visibleWidth(truncated)),
-		);
-		const background = selected ? "selectedBg" : "customMessageBg";
-		return (
-			this.theme.fg("borderAccent", "│") +
-			this.theme.bg(background, truncated + padding) +
-			this.theme.fg("borderAccent", "│")
-		);
-	}
-
-	private renderSeparator(innerWidth: number): string {
-		return this.theme.fg(
-			"borderAccent",
-			`├${"─".repeat(innerWidth)}┤`,
-		);
-	}
 }
 
 export async function openCommandPalette(
 	ctx: ExtensionContext,
 	registry: CommandPaletteRegistry,
 ): Promise<void> {
-	if (ctx.mode !== "tui") {
-		ctx.ui.notify("Command Palette is only available in TUI mode", "warning");
-		return;
-	}
-
-	const actionId = await ctx.ui.custom<string | undefined>(
-		(tui, theme, keybindings, done) =>
-			new CommandPaletteComponent(
-				registry.list(),
-				theme,
-				keybindings,
-				tui,
-				done,
-			),
+	const actionId = await showModal<string>(
+		ctx,
+		(modalContext) =>
+			new CommandPaletteComponent(registry.list(), modalContext),
 		{
-			overlay: true,
 			overlayOptions: {
-				anchor: "center",
 				width: 96,
 				maxHeight: "80%",
-				margin: 1,
 			},
+			unavailableMessage:
+				"Command Palette is only available in TUI mode",
 		},
 	);
 

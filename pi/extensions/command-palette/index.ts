@@ -1,10 +1,8 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { registerCommandPaletteActions } from "./actions/index.ts";
-import {
-	COMMAND_PALETTE_SHORTCUT,
-	openCommandPalette,
-} from "./palette.ts";
+import { openCommandPalette } from "./palette.ts";
 import { CommandPaletteRegistry } from "./registry.ts";
+import { COMMAND_PALETTE_SHORTCUT } from "./shortcut.ts";
 
 export default function commandPaletteExtension(pi: ExtensionAPI): void {
 	const registry = new CommandPaletteRegistry();
