@@ -3,7 +3,7 @@ import {
 	type Theme,
 } from "@earendil-works/pi-coding-agent";
 
-type ChainOperator = "&&" | "||";
+type ChainOperator = "&&" | "||" | "|";
 
 interface CommandSegment {
 	operator?: ChainOperator;
@@ -94,12 +94,14 @@ function splitCommandChain(command: string): CommandSegment[] {
 					? "&&"
 					: char === "|" && next === "|"
 						? "||"
-						: undefined
+						: char === "|" && next !== "&"
+							? "|"
+							: undefined
 				: undefined;
 		if (operator) {
 			pushSegment();
 			pendingOperator = operator;
-			index++;
+			if (operator.length === 2) index++;
 			continue;
 		}
 
