@@ -1,12 +1,13 @@
 import {
-	createBashTool,
+	createBashToolDefinition,
 	type ExtensionAPI,
 } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
+import { renderHiddenResult } from "./hidden-results.ts";
 import { formatShellCommand } from "./shell-command.ts";
 
 export function registerBashTool(pi: ExtensionAPI) {
-	const bash = createBashTool(process.cwd());
+	const bash = createBashToolDefinition(process.cwd());
 
 	pi.registerTool({
 		...bash,
@@ -28,6 +29,10 @@ export function registerBashTool(pi: ExtensionAPI) {
 				formatShellCommand(command, theme) + timeoutSuffix,
 			);
 			return component;
+		},
+
+		renderResult(_result, _options, _theme, context) {
+			return renderHiddenResult(context.lastComponent);
 		},
 	});
 }
