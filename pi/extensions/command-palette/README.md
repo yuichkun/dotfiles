@@ -6,7 +6,7 @@ Pi内の決定的なローカルUI操作を、対話・prompt・skillとは別�
 現在のAction：
 
 - `Browse tool outputs`：Tool Output Viewerを開く
-- `Open workspace in VS Code`：現在のworking directoryを`code` CLIで開く
+- `Open in VS Code…`：独立したWorkspace Pickerを開き、現在または別のWorkspaceを選択する
 
 標準のTool Output展開は`pi/keybindings.json`で解除している。
 Modalのlifecycleとframeは`../shared/`の汎用基盤を利用し、このExtension内には持たない。

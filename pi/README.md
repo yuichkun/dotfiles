@@ -25,6 +25,7 @@
 - `APPEND_SYSTEM.md`
 - `keybindings.json`
 - `models.json`
+- `workspaces.json`
 - `extensions/`
 - `skills/`
 - `prompts/`

@@ -1,0 +1,12 @@
+{
+  "roots": [
+    "~/workspace"
+  ],
+  "entries": [
+    {
+      "name": "dotfiles",
+      "path": "~/dotfiles"
+    }
+  ],
+  "maxDepth": 3
+}

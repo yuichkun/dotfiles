@@ -30,7 +30,7 @@ Environment:
 
 Managed paths, if present under dotfiles/pi:
   settings.json, AGENTS.md, SYSTEM.md, APPEND_SYSTEM.md, keybindings.json, models.json
-  extensions/, skills/, prompts/, themes/, agents/, chains/
+  workspaces.json, extensions/, skills/, prompts/, themes/, agents/, chains/
 
 Not managed on purpose:
   auth.json, trust.json, sessions/, npm/, git/
@@ -101,6 +101,7 @@ install_links() {
     APPEND_SYSTEM.md \
     keybindings.json \
     models.json \
+    workspaces.json \
     extensions \
     skills \
     prompts \
