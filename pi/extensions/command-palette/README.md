@@ -2,7 +2,7 @@
 
 Pi内の決定的なローカルUI操作を、対話・prompt・skillとは別に管理する。
 
-現在は基盤のみ。`Ctrl+O` または `/palette` で空のPaletteを開き、検索・選択・Modal表示を確認できる。
+現在は基盤のみ。`Ctrl+O` で空のPaletteを開閉し、検索・選択・Modal表示を確認できる。`/palette` から開くこともできる。
 標準のTool Output展開は`pi/keybindings.json`で解除している。
 
 ## Actionの追加

@@ -6,6 +6,8 @@ import type {
 import {
 	fuzzyFilter,
 	Input,
+	Key,
+	matchesKey,
 	truncateToWidth,
 	visibleWidth,
 	type Component,
@@ -16,6 +18,8 @@ import type {
 	CommandPaletteAction,
 	CommandPaletteRegistry,
 } from "./registry.ts";
+
+export const COMMAND_PALETTE_SHORTCUT = Key.ctrl("o");
 
 const MIN_VISIBLE_ACTION_ROWS = 5;
 const MAX_VISIBLE_ACTIONS = 8;
@@ -67,7 +71,10 @@ class CommandPaletteComponent implements Component, Focusable {
 	}
 
 	handleInput(data: string): void {
-		if (this.keybindings.matches(data, "tui.select.cancel")) {
+		if (
+			matchesKey(data, COMMAND_PALETTE_SHORTCUT) ||
+			this.keybindings.matches(data, "tui.select.cancel")
+		) {
 			this.done(undefined);
 			return;
 		}
