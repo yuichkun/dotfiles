@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>進行ハブ</title>
+<link rel="stylesheet" href="hub.css">
+</head>
+<body>
+<!-- テンプレートは編集禁止。表示内容の更新は hub-data.js だけで行う（references/progress-hub.md） -->
+<main>
+  <h1 id="hub-title">進行ハブ</h1>
+  <p class="updated" id="hub-updated"></p>
+  <div id="hub-errors"></div>
+
+  <h2>進捗</h2>
+  <ul class="phase-strip" id="phase-strip"></ul>
+  <div class="checkpoints" id="checkpoints"></div>
+
+  <h2>このフェーズで分かったこと</h2>
+  <div class="card"><ul class="plain" id="findings"></ul></div>
+
+  <h2>見るもの</h2>
+  <div class="card screens" id="screens"></div>
+
+  <h2>決めてほしいこと</h2>
+  <div class="card decision">
+    <div class="ask" id="decision-ask"></div>
+    <ul class="plain" id="decision-options"></ul>
+    <div class="note">この画面は表示専用。決定・回答・質問はチャットで返してください。</div>
+  </div>
+
+  <h2>この後の流れ</h2>
+  <div class="card" id="next"></div>
+
+  <footer class="hub-footer">narrative-portfolio 進行ハブ — 決定・回答はチャットで。</footer>
+</main>
+<script src="hub-data.js"></script>
+<script>
+(function () {
+  var PHASES = [
+    "0 接続確認と厚み診断", "1 調査", "2 方向性提案", "3 決定書",
+    "4 素材収穫", "5 実装", "6 検証", "7 鑑賞とフィードバック"
+  ];
+  var CHECKPOINTS = { 1: "① 方向性選択", 2: "② 決定書承認", 3: "③ 初稿トーン" };
+  var errors = [];
+  var D = window.HUB_DATA;
+  function err(msg) { errors.push(msg); }
+  function show(id, text) { document.getElementById(id).textContent = text; }
+  function li(parent, text) {
+    var el = document.createElement("li");
+    el.textContent = text;
+    parent.appendChild(el);
+  }
+  if (!D) { err("hub-data.js が読み込めない（window.HUB_DATA が未定義）"); D = {}; }
+
+  if (D.subject && D.subject.name) {
+    show("hub-title", D.subject.name + " — ナラティブ・ポートフォリオ進行ハブ");
+    document.title = D.subject.name + " — 進行ハブ";
+  } else { err("subject.name がない（identity.json の canonical 表記をコピーする）"); }
+
+  show("hub-updated", D.updatedAt ? "更新: " + D.updatedAt : "");
+  if (!D.updatedAt) err("updatedAt がない");
+
+  var cur = D.phase && typeof D.phase.current === "number" ? D.phase.current : null;
+  if (cur === null) err("phase.current がない（0〜7の数値）");
+  var strip = document.getElementById("phase-strip");
+  PHASES.forEach(function (label, i) {
+    var el = document.createElement("li");
+    el.textContent = label;
+    if (cur !== null) {
+      if (i < cur) el.className = "done";
+      else if (i === cur) el.className = "current";
+    }
+    strip.appendChild(el);
+  });
+  var cps = document.getElementById("checkpoints");
+  Object.keys(CHECKPOINTS).forEach(function (k) {
+    var st = D.phase && D.phase.checkpoints ? D.phase.checkpoints[k] : "pending";
+    var el = document.createElement("span");
+    el.className = st === "passed" ? "passed" : "pending";
+    el.textContent = CHECKPOINTS[k] + (st === "passed" ? " 通過" : " 未");
+    cps.appendChild(el);
+  });
+
+  var findings = document.getElementById("findings");
+  if (Array.isArray(D.findings) && D.findings.length) {
+    D.findings.forEach(function (f) { li(findings, f); });
+  } else { err("findings がない（このフェーズで分かったことを平易な文で1件以上）"); }
+
+  var screens = document.getElementById("screens");
+  (Array.isArray(D.screens) ? D.screens : []).forEach(function (s) {
+    var row = document.createElement("div");
+    var a = document.createElement("a");
+    a.href = s.href; a.textContent = s.label;
+    row.appendChild(a);
+    if (s.note) {
+      var n = document.createElement("span");
+      n.className = "note"; n.textContent = s.note;
+      row.appendChild(n);
+    }
+    screens.appendChild(row);
+  });
+  if (!screens.childNodes.length) {
+    screens.textContent = "（このフェーズで開く画面はまだない）";
+  }
+
+  if (D.decision && D.decision.ask) {
+    show("decision-ask", D.decision.ask);
+    var opts = document.getElementById("decision-options");
+    (D.decision.options || []).forEach(function (o) { li(opts, o); });
+  } else { err("decision.ask がない（決めてほしいことを1〜3行で）"); }
+
+  if (D.next) { show("next", D.next); } else { err("next がない（決定後に何が起きるか1行）"); }
+
+  if (errors.length) {
+    var box = document.getElementById("hub-errors");
+    var b = document.createElement("div");
+    b.className = "banner-error";
+    b.textContent = "hub-data.js の不備（本人に見せる前に直すこと）:\n- " + errors.join("\n- ");
+    box.appendChild(b);
+  }
+})();
+</script>
+</body>
+</html>

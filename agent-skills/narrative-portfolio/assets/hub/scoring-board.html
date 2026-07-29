@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>採点ボード</title>
+<link rel="stylesheet" href="hub.css">
+</head>
+<body>
+<!-- テンプレートは編集禁止。表示内容の更新は hub-data.js だけで行う（references/progress-hub.md） -->
+<main>
+  <a class="backlink" href="index.html">← 進行ハブへ戻る</a>
+  <h1>重要度の採点ボード</h1>
+  <p class="updated" id="hub-updated"></p>
+  <p class="updated">S級・A級は全件を並べてある。上下させたいものがあればチャットで（特にS級は作品の柱になるので納得いくまで）。</p>
+  <div id="hub-errors"></div>
+
+  <h2 id="s-heading">S級</h2>
+  <div class="tier-grid" id="tier-S"></div>
+
+  <h2 id="a-heading">A級</h2>
+  <div class="tier-grid" id="tier-A"></div>
+
+  <h2>B級・C級</h2>
+  <div id="tier-rest"></div>
+
+  <footer class="hub-footer">この画面は表示専用。昇格・降格の指示はチャットで。</footer>
+</main>
+<script src="hub-data.js"></script>
+<script>
+(function () {
+  var errors = [];
+  var D = window.HUB_DATA;
+  if (!D) { errors.push("hub-data.js が読み込めない"); D = {}; }
+  var T = D.tiers;
+  document.getElementById("hub-updated").textContent = D.updatedAt ? "更新: " + D.updatedAt : "";
+
+  function card(item) {
+    var el = document.createElement("div");
+    el.className = "tier-card";
+    var thumb = document.createElement("div");
+    thumb.className = "thumb";
+    if (item.img) {
+      var img = document.createElement("img");
+      img.src = item.img;
+      img.alt = item.title; /* altはタイトルのみ。被写体の推測キャプションを書かない */
+      img.loading = "lazy";
+      thumb.appendChild(img);
+    } else {
+      thumb.textContent = "画像なし";
+    }
+    el.appendChild(thumb);
+    var body = document.createElement("div");
+    body.className = "body";
+    var title = document.createElement("div");
+    title.className = "title";
+    title.textContent = item.title;
+    body.appendChild(title);
+    if (item.summary) {
+      var s = document.createElement("div");
+      s.textContent = item.summary;
+      body.appendChild(s);
+    }
+    if (item.reason) {
+      var r = document.createElement("div");
+      r.className = "reason";
+      r.textContent = "根拠: " + item.reason;
+      body.appendChild(r);
+    }
+    if (item.url) {
+      var src = document.createElement("div");
+      src.className = "src";
+      var a = document.createElement("a");
+      a.href = item.url; a.textContent = "出典";
+      src.appendChild(a);
+      body.appendChild(src);
+    } else { errors.push("出典URLのない項目がある: " + item.title); }
+    el.appendChild(body);
+    return el;
+  }
+
+  if (!T) {
+    errors.push("tiers がない（S/A/B/C を付けてから、この画面を本人に見せる）");
+  } else {
+    var tierSum = ["S", "A", "B", "C"].reduce(function (n, t) { return n + ((T[t] || []).length); }, 0);
+    var readCount = D.coverage && typeof D.coverage.read === "number" ? D.coverage.read : null;
+    if (readCount === null) {
+      errors.push("coverage.read がない（採点の全件性を検証できない）");
+    } else if (tierSum !== readCount) {
+      errors.push("採点合計 " + tierSum + " 件が read " + readCount + " 件と一致しない（未採点のソースが残っている）");
+    }
+    ["S", "A"].forEach(function (tier) {
+      var list = T[tier] || [];
+      document.getElementById(tier.toLowerCase() + "-heading").textContent = tier + "級（" + list.length + "件・全件表示）";
+      var grid = document.getElementById("tier-" + tier);
+      list.forEach(function (item) { grid.appendChild(card(item)); });
+      if (!list.length) errors.push(tier + "級が0件（採点が終わっていないなら、この画面をまだ見せない）");
+    });
+    var rest = document.getElementById("tier-rest");
+    ["B", "C"].forEach(function (tier) {
+      var list = T[tier] || [];
+      var det = document.createElement("details");
+      var sum = document.createElement("summary");
+      sum.textContent = tier + "級 " + list.length + "件（開いて確認できる）";
+      det.appendChild(sum);
+      var ul = document.createElement("ul");
+      ul.className = "plain";
+      list.forEach(function (item) {
+        var el = document.createElement("li");
+        el.textContent = item.title + (item.summary ? " — " + item.summary : "");
+        if (item.url) {
+          el.textContent += " ";
+          var a = document.createElement("a");
+          a.href = item.url; a.textContent = "出典";
+          el.appendChild(a);
+        }
+        ul.appendChild(el);
+      });
+      det.appendChild(ul);
+      rest.appendChild(det);
+    });
+  }
+
+  if (errors.length) {
+    var b = document.createElement("div");
+    b.className = "banner-error";
+    b.textContent = "hub-data.js の不備（本人に見せる前に直すこと）:\n- " + errors.join("\n- ");
+    document.getElementById("hub-errors").appendChild(b);
+  }
+})();
+</script>
+</body>
+</html>

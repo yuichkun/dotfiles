@@ -1,0 +1,73 @@
+/* 進行ハブ共通スタイル。編集禁止 — 変更したい場合は skill-feedback.md に記録する */
+:root {
+  --bg: #f5f4f0;
+  --panel: #ffffff;
+  --ink: #1c1b18;
+  --sub: #6b675f;
+  --line: #dcd9d2;
+  --accent: #8a5a2b;
+  --done: #3d7a4a;
+  --todo: #b9b5ac;
+  --warn: #a03030;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+  line-height: 1.7;
+}
+main { max-width: 960px; margin: 0 auto; padding: 24px 20px 64px; }
+h1 { font-size: 22px; margin: 0 0 4px; }
+h2 { font-size: 15px; margin: 32px 0 10px; color: var(--sub); letter-spacing: .08em; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+a { color: var(--accent); }
+.updated { color: var(--sub); font-size: 12px; margin: 0 0 20px; }
+.banner-error {
+  background: #fbeaea; color: var(--warn); border: 1px solid var(--warn);
+  padding: 10px 14px; margin: 16px 0; font-size: 13px; white-space: pre-wrap;
+}
+.phase-strip { display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0; list-style: none; }
+.phase-strip li {
+  flex: 1 1 100px; min-width: 100px; background: var(--panel); border: 1px solid var(--line);
+  padding: 6px 8px; font-size: 12px; color: var(--todo);
+}
+.phase-strip li.done { color: var(--done); border-color: var(--done); }
+.phase-strip li.current { color: #fff; background: var(--accent); border-color: var(--accent); font-weight: bold; }
+.checkpoints { display: flex; gap: 12px; margin-top: 10px; font-size: 12px; color: var(--sub); }
+.checkpoints .passed::before { content: "✓ "; color: var(--done); }
+.checkpoints .pending::before { content: "・"; }
+.card { background: var(--panel); border: 1px solid var(--line); padding: 14px 18px; }
+ul.plain { margin: 0; padding-left: 1.2em; }
+.decision { border-left: 4px solid var(--accent); }
+.decision .ask { font-weight: bold; }
+.decision .note { color: var(--sub); font-size: 12px; margin-top: 10px; }
+.screens { display: flex; flex-direction: column; gap: 8px; }
+.screens a { font-weight: bold; }
+.screens .note { color: var(--sub); font-size: 12px; margin-left: 8px; font-weight: normal; }
+.stats { display: flex; gap: 10px; flex-wrap: wrap; margin: 0 0 16px; }
+.stats .stat { background: var(--panel); border: 1px solid var(--line); padding: 8px 14px; min-width: 110px; }
+.stats .num { font-size: 24px; font-weight: bold; display: block; }
+.stats .label { font-size: 12px; color: var(--sub); }
+table { border-collapse: collapse; width: 100%; background: var(--panel); font-size: 13px; }
+th, td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; vertical-align: top; }
+th { background: var(--bg); color: var(--sub); font-weight: normal; }
+.tier-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.tier-card { background: var(--panel); border: 1px solid var(--line); display: flex; flex-direction: column; }
+.tier-card .thumb {
+  aspect-ratio: 16 / 9; background: #e7e5df; display: flex; align-items: center; justify-content: center;
+  color: var(--sub); font-size: 12px; overflow: hidden;
+}
+.tier-card .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tier-card .body { padding: 10px 12px 12px; font-size: 13px; }
+.tier-card .title { font-weight: bold; font-size: 14px; }
+.tier-card .reason { color: var(--sub); margin-top: 4px; }
+.tier-card .src { margin-top: 6px; font-size: 12px; }
+.chip { display: inline-block; font-size: 11px; padding: 0 8px; border: 1px solid var(--accent); color: var(--accent); margin-right: 6px; }
+details { background: var(--panel); border: 1px solid var(--line); padding: 8px 14px; margin-top: 12px; }
+details summary { cursor: pointer; color: var(--sub); }
+footer.hub-footer {
+  margin-top: 48px; padding-top: 12px; border-top: 1px solid var(--line);
+  color: var(--sub); font-size: 12px;
+}
+.backlink { font-size: 13px; margin-bottom: 16px; display: inline-block; }
