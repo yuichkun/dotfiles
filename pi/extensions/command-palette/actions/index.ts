@@ -1,8 +1,9 @@
 import type { CommandPaletteRegistry } from "../registry.ts";
+import { registerToolOutputActions } from "./tool-outputs.ts";
 
 /** Register deterministic, local UI actions here. */
 export function registerCommandPaletteActions(
-	_registry: CommandPaletteRegistry,
+	registry: CommandPaletteRegistry,
 ): void {
-	// The first real action will be the tool output browser.
+	registerToolOutputActions(registry);
 }
