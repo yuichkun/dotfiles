@@ -1,6 +1,21 @@
 ---
 name: vitepress-learning-site
-description: Build a multi-page, research-grade VitePress learning site from scratch for a topic the user wants to deeply understand. Drives an interview-first workflow — grills the user one decision at a time on scope, audience, language, depth, and boundaries; gathers primary sources before any writing begins; scaffolds a VitePress project with Mermaid (and optionally KaTeX); dispatches parallel writing sub-agents under strict fact-first discipline (mandatory source citations per file, explicit uncertainty markers, zero speculation); runs an independent external audit pass (e.g., via a second LLM/agent such as Codex) for fact-check and structural critique; verifies rendering in a real browser with dev tools (build success alone is insufficient — math layout, Mermaid SVGs, console errors all get checked). Use this skill whenever the user asks to "build a learning site", "make a study reference", "produce a structured explainer for X", wants a VitePress-based "I want to deeply understand X" outcome, or says things like "ドキュメントサイト作って" / "学習リファレンス作って" / "Xの内部を解説するサイト作って". Also trigger when the user is about to take on a self-study project that would benefit from a persistent multi-page written resource. Do NOT use for single-page READMEs, blog-style writeups, or product-landing docs — this skill is for multi-page, structured, long-form learning deliverables only.
+description: >-
+  Build a research-grade multi-page VitePress site from scratch so the user deeply
+  understands the topic. Interview first: settle
+  scope/audience/language/depth/boundaries one at a time; gather primary sources
+  pre-writing; scaffold Mermaid + optional KaTeX; parallel sub-agent writers obey
+  strict fact-first rules (mandatory source citations/file, explicit uncertainty
+  markers, zero speculation); use an independent external LLM/agent (e.g. Codex) to
+  audit facts/structure; verify math layout, Mermaid SVGs, and console errors in
+  real-browser dev tools—build success alone is insufficient. Use for "build a
+  learning site" / "make a study reference" / "produce a structured explainer for
+  X", a VitePress-based "I want to deeply understand X" outcome, or
+  "ドキュメントサイト作って" / "学習リファレンス作って" /
+  "Xの内部を解説するサイト作って"; also imminent self-study needing a persistent
+  multi-page written resource. Not for single-page READMEs/blog-style
+  writeups/product-landing docs; only structured multi-page long-form learning
+  deliverables.
 ---
 
 # VitePress Learning Site Builder
