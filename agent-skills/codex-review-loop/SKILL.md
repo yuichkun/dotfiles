@@ -1,21 +1,20 @@
 ---
 name: codex-review-loop
 description: >-
-  Run the codex ↔ developer review cycle on a GitHub PR autonomously — fetch codex
-  findings on the latest commit, evaluate each fairly on the merits, fix legitimate
-  ones with project-appropriate commits + tests, push, post a fresh `@codex review`
-  top-level PR comment, and either schedule the next wakeup (continue) or return
-  without scheduling (stop). Designed to be invoked via `/loop /codex-review-loop`
-  so the `/loop` harness provides the cross-invocation cadence; the skill itself does
-  exactly one cycle per call and decides whether there is a next cycle. Use whenever
-  the user says "codexのレビュー対応して", "codex とのラリー回して", "codex review
-  loop", "@codexと回して", "codexのレビュー対応ループ", or otherwise indicates they
-  want the codex review rally handled end-to-end. Also use proactively right after
-  the user creates a PR that codex will review, if they signal they want the
-  back-and-forth handled. Handles codex's 👀-reaction heartbeat: a 👀 on your
-  re-request comment means codex is processing; absence after a reasonable wait
-  means the mention was dropped and must be re-posted. Pauses only when a finding
-  genuinely requires the user's judgment, not just because the reviewer pushed back.
+  Autonomously run the codex ↔ developer review cycle on a GitHub PR: fetch findings
+  on latest commit; fairly evaluate each on its merits; fix valid ones with
+  project-appropriate commits + tests; push; post a fresh top-level `@codex review`
+  PR comment; schedule next wakeup (continue) or return unscheduled (stop). For
+  `/loop /codex-review-loop`, `/loop` provides cross-invocation cadence; this skill
+  runs exactly one cycle/call and decides if another is needed. Use for
+  "codexのレビュー対応して", "codex とのラリー回して", "codex review loop",
+  "@codexと回して", "codexのレビュー対応ループ", or any request to handle the rally
+  end-to-end. Also trigger proactively just after the user creates a PR codex will
+  review if they signal they want the back-and-forth handled. Handle codex's 👀
+  heartbeat: a 👀 on your re-request comment means processing; absence after a
+  reasonable wait means the mention was dropped, so re-post it. Pause only for a
+  finding genuinely requiring the user's judgment, never just because the reviewer
+  pushed back.
 ---
 
 # Codex review loop
