@@ -24,7 +24,9 @@ LLM summaryが到着するまではTool名・path・command種別から作るfal
 
 `Ctrl+O`でPi本体のTool展開を切り替える。別のTool Output Viewerは使用しない。
 
-Expanded表示ではcompact summaryとfactsを見出しとして残し、その下をBuilt-in Toolの元のrendererへ委譲して正確な引数・command・output・diffをinline表示する。同じAssistant messageに複数Tool Callがある場合は`batch call 2/4`のように位置を併記し、LLM summaryがfallbackした場合は展開時だけ理由を表示する。
+Expanded表示ではcompact summaryとfactsを見出しとして残し、その下へ正確な引数・command・output・diffをinline表示する。同じAssistant messageに複数Tool Callがある場合は`batch call 2/4`のように位置を併記し、LLM summaryがfallbackした場合は展開時だけ理由を表示する。
+
+Factsはtool・target・成功／失敗・duration等を意味別に配色する。Expanded outputはReadのsyntax highlightingとEditのdiff rendererを維持し、Bashでは安全なSGR colorだけを保持してcursor操作等のterminal control sequenceを除去する。ANSI colorがないBash outputとGrep／Find／Ls outputには共通のsemantic colorを適用する。
 
 ## 永続化
 

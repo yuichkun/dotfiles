@@ -10,6 +10,7 @@ import {
 	getResultFacts,
 	getTextOutput,
 } from "./facts.ts";
+import { colorizeExpandedToolOutput } from "./output-color.ts";
 import type { ToolSummaryStore } from "./store.ts";
 import type { ToolBatchInfo } from "./types.ts";
 
@@ -38,6 +39,43 @@ function spinner(startedAt: number | undefined): string {
 	return SPINNER_FRAMES[Math.floor(elapsed / SPINNER_INTERVAL_MS) % SPINNER_FRAMES.length]!;
 }
 
+function renderFact(fact: string, index: number, theme: Theme): string {
+	if (index === 0) return theme.bold(theme.fg("accent", fact));
+
+	const diff = fact.match(/^\+(\d+)\s*\/\s*-(\d+)$/);
+	if (diff) {
+		return `${theme.fg("toolDiffAdded", `+${diff[1]}`)} ${theme.fg("dim", "/")} ${theme.fg("toolDiffRemoved", `-${diff[2]}`)}`;
+	}
+	const tests = fact.match(/^(\d+ passed)\s*\/\s*(\d+ failed)$/i);
+	if (tests) {
+		return `${theme.fg("success", tests[1]!)} ${theme.fg("dim", "/")} ${theme.fg("error", tests[2]!)}`;
+	}
+	const running = fact.match(/^running\s+(.+)$/i);
+	if (running) {
+		return `${theme.fg("warning", "running")} ${theme.fg("dim", running[1]!)}`;
+	}
+	if (/^\d+(?:\.\d+)?s$/.test(fact) || /^batch call \d+\/\d+$/.test(fact)) {
+		return theme.fg("dim", fact);
+	}
+	if (/\b(?:failed|error|exit|fatal)\b/i.test(fact)) return theme.fg("error", fact);
+	if (/\b(?:passed|passing|success)\b/i.test(fact)) return theme.fg("success", fact);
+	if (/\b(?:truncated|warning|no matches|summarizing)\b/i.test(fact)) {
+		return theme.fg("warning", fact);
+	}
+	if (/^“.*”$/.test(fact)) return theme.fg("warning", fact);
+	if (fact.startsWith("~") || fact.startsWith("/") || fact.includes("/") || /\.[A-Za-z0-9]+(?::\d+(?:-\d+)?)?$/.test(fact)) {
+		return theme.fg("accent", fact);
+	}
+	return theme.fg("text", fact);
+}
+
+function renderFacts(facts: readonly string[], theme: Theme): string {
+	const visibleFacts = facts.filter((fact) => fact !== "completed");
+	return visibleFacts
+		.map((fact, index) => renderFact(fact, index, theme))
+		.join(theme.fg("dim", " · "));
+}
+
 function renderCompactText(options: {
 	marker: string;
 	markerColor: Parameters<Theme["fg"]>[0];
@@ -49,8 +87,9 @@ function renderCompactText(options: {
 }): string {
 	const { theme } = options;
 	let text = `${theme.fg(options.markerColor, options.marker)} ${theme.fg("text", options.summary)}`;
-	if (options.facts.length > 0) {
-		text += `\n  ${theme.fg("muted", options.facts.join(" · "))}`;
+	const facts = renderFacts(options.facts, theme);
+	if (facts) {
+		text += `\n  ${facts}`;
 	}
 	if (options.errorTail) {
 		text += `\n  ${theme.fg("error", `last: ${options.errorTail}`)}`;
@@ -90,14 +129,25 @@ function renderExactCall(
 }
 
 function renderExactResult(
+	toolName: string,
+	args: Record<string, unknown>,
 	result: AnyToolResult,
 	options: { expanded: boolean; isPartial: boolean },
 	theme: Theme,
 	context: AnyRenderContext,
 	original?: ToolDefinition<any, any, any>["renderResult"],
 ): Component {
+	if (options.expanded) {
+		const colored = colorizeExpandedToolOutput({
+			toolName,
+			args,
+			content: result.content,
+			theme,
+		});
+		if (colored !== undefined) return new Text(colored, 0, 0);
+	}
 	if (original) return original(result, options, theme, context);
-	return new Text(theme.fg("toolOutput", getTextOutput(result.content)), 0, 0);
+	return new Text(theme.fg("text", getTextOutput(result.content)), 0, 0);
 }
 
 function renderExpandedCall(options: {
@@ -183,6 +233,8 @@ function renderExpandedResult(options: {
 	);
 	container.addChild(
 		renderExactResult(
+			options.toolName,
+			options.args,
 			options.result,
 			{ expanded: true, isPartial: false },
 			options.theme,
@@ -245,6 +297,8 @@ export function withCompactRenderer(
 		renderResult(result, options, theme, context) {
 			if (options.expanded && options.isPartial) {
 				return renderExactResult(
+					toolName,
+					asArgs(context.args),
 					result,
 					options,
 					theme,

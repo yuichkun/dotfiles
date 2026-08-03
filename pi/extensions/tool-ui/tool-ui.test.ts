@@ -1,11 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { Theme } from "@earendil-works/pi-coding-agent";
 import {
 	attachCompactMetadata,
 	getCompactMetadata,
 	getFallbackSemantic,
 	getResultFacts,
 } from "./facts.ts";
+import {
+	colorizeExpandedToolOutput,
+	sanitizeTerminalAnsi,
+} from "./output-color.ts";
 import { parseSummaryResponse } from "./summary-format.ts";
 import { COMPACT_TOOL_UI_VERSION } from "./types.ts";
 
@@ -29,6 +34,30 @@ test("uses meaningful command categories in fallback summaries", () => {
 	assert.equal(
 		validationSummary.success,
 		"TypeScript typecheck + diff check + git statusが完了しました",
+	);
+});
+
+test("preserves color SGR while removing terminal control sequences", () => {
+	const result = sanitizeTerminalAnsi(
+		"\u001b[31merror\u001b[0m\u001b[2J\u001b]0;unsafe title\u0007done",
+	);
+	assert.equal(result.hasSgr, true);
+	assert.equal(result.text, "\u001b[31merror\u001b[0mdone\u001b[0m");
+});
+
+test("applies semantic colors when command output has no ANSI", () => {
+	const theme = {
+		fg: (color: string, value: string) => `<${color}>${value}</${color}>`,
+	} as unknown as Theme;
+	const output = colorizeExpandedToolOutput({
+		toolName: "bash",
+		args: { command: "node --test" },
+		content: [{ type: "text", text: "✔ parser passed\nAssertionError: mismatch" }],
+		theme,
+	});
+	assert.equal(
+		output,
+		"<success>✔ parser passed</success>\n<error>AssertionError: mismatch</error>",
 	);
 });
 

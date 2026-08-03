@@ -305,7 +305,6 @@ export function getResultFacts(options: {
 			facts.push(getCommandLabel(asString(args.command) ?? ""));
 			const testFact = extractTestFact(output);
 			if (testFact) facts.push(testFact);
-			else if (!isError) facts.push("completed");
 			break;
 		}
 		default: {
