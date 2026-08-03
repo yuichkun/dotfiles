@@ -68,6 +68,7 @@ test("round-trips compact metadata without dropping built-in details", () => {
 			failure: "確認に失敗しました",
 		},
 		facts: ["read", "README.md", "10 lines"],
+		batch: { id: "call-1", index: 1, size: 2 },
 	};
 	const details = attachCompactMetadata({ truncation: { truncated: false } }, metadata);
 	assert.deepEqual(details.truncation, { truncated: false });

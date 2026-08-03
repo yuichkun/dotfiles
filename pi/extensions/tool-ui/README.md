@@ -24,7 +24,7 @@ LLM summaryが到着するまではTool名・path・command種別から作るfal
 
 `Ctrl+O`でPi本体のTool展開を切り替える。別のTool Output Viewerは使用しない。
 
-Expanded表示では、Built-in Toolの元のrendererへ委譲し、正確な引数・command・output・diffをinline表示する。
+Expanded表示ではcompact summaryとfactsを見出しとして残し、その下をBuilt-in Toolの元のrendererへ委譲して正確な引数・command・output・diffをinline表示する。同じAssistant messageに複数Tool Callがある場合は`batch call 2/4`のように位置を併記し、LLM summaryがfallbackした場合は展開時だけ理由を表示する。
 
 ## 永続化
 
@@ -34,6 +34,7 @@ Expanded表示では、Built-in Toolの元のrendererへ委譲し、正確な引
 - result facts
 - duration
 - summarizer modelとprompt version
+- 同じAssistant message内でのbatch ID・位置・件数
 
 Sessionをresumeした場合は保存済みmetadataを使い、LLMを再実行しない。実装前の古いTool Resultはdeterministic fallbackで表示する。
 

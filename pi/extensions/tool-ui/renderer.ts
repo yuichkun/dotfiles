@@ -2,7 +2,7 @@ import type {
 	Theme,
 	ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
-import { Text, type Component } from "@earendil-works/pi-tui";
+import { Container, Spacer, Text, type Component } from "@earendil-works/pi-tui";
 import {
 	getCompactMetadata,
 	getFallbackSemantic,
@@ -11,6 +11,7 @@ import {
 	getTextOutput,
 } from "./facts.ts";
 import type { ToolSummaryStore } from "./store.ts";
+import type { ToolBatchInfo } from "./types.ts";
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const SPINNER_INTERVAL_MS = 120;
@@ -43,6 +44,7 @@ function renderCompactText(options: {
 	summary: string;
 	facts: readonly string[];
 	errorTail?: string;
+	summaryError?: string;
 	theme: Theme;
 }): string {
 	const { theme } = options;
@@ -53,7 +55,23 @@ function renderCompactText(options: {
 	if (options.errorTail) {
 		text += `\n  ${theme.fg("error", `last: ${options.errorTail}`)}`;
 	}
+	if (options.summaryError) {
+		const reason = options.summaryError.replace(/\s+/g, " ").trim().slice(0, 180);
+		text += `\n  ${theme.fg("warning", `⚠ summary fallback: ${reason}`)}`;
+	}
 	return text;
+}
+
+function withBatchFact(facts: readonly string[], batch: ToolBatchInfo | undefined): string[] {
+	const expandedFacts = [...facts];
+	if (batch && batch.size > 1) {
+		expandedFacts.push(`batch call ${batch.index}/${batch.size}`);
+	}
+	return expandedFacts;
+}
+
+function freshRenderContext(context: AnyRenderContext): AnyRenderContext {
+	return { ...context, lastComponent: undefined };
 }
 
 function renderExactCall(
@@ -82,6 +100,99 @@ function renderExactResult(
 	return new Text(theme.fg("toolOutput", getTextOutput(result.content)), 0, 0);
 }
 
+function renderExpandedCall(options: {
+	toolName: string;
+	args: Record<string, unknown>;
+	summary: string;
+	facts: readonly string[];
+	started: boolean;
+	startedAt?: number;
+	batch?: ToolBatchInfo;
+	theme: Theme;
+	context: AnyRenderContext;
+	original?: ToolDefinition<any, any, any>["renderCall"];
+}): Component {
+	const container = new Container();
+	container.addChild(
+		new Text(
+			renderCompactText({
+				marker: options.started ? spinner(options.startedAt) : "○",
+				markerColor: options.started ? "accent" : "dim",
+				summary: options.summary,
+				facts: withBatchFact(options.facts, options.batch),
+				theme: options.theme,
+			}),
+			0,
+			0,
+		),
+	);
+	container.addChild(new Spacer(1));
+	container.addChild(
+		renderExactCall(
+			options.toolName,
+			options.args,
+			options.theme,
+			freshRenderContext(options.context),
+			options.original,
+		),
+	);
+	return container;
+}
+
+function renderExpandedResult(options: {
+	toolName: string;
+	args: Record<string, unknown>;
+	result: AnyToolResult;
+	semanticSummary: string;
+	facts: readonly string[];
+	errorTail?: string;
+	summaryError?: string;
+	batch?: ToolBatchInfo;
+	isError: boolean;
+	theme: Theme;
+	context: AnyRenderContext;
+	originalCall?: ToolDefinition<any, any, any>["renderCall"];
+	originalResult?: ToolDefinition<any, any, any>["renderResult"];
+}): Component {
+	const container = new Container();
+	container.addChild(
+		new Text(
+			renderCompactText({
+				marker: options.isError ? "✗" : "✓",
+				markerColor: options.isError ? "error" : "success",
+				summary: options.semanticSummary,
+				facts: withBatchFact(options.facts, options.batch),
+				errorTail: options.errorTail,
+				summaryError: options.summaryError,
+				theme: options.theme,
+			}),
+			0,
+			0,
+		),
+	);
+	container.addChild(new Spacer(1));
+	const exactContext = freshRenderContext(options.context);
+	container.addChild(
+		renderExactCall(
+			options.toolName,
+			options.args,
+			options.theme,
+			exactContext,
+			options.originalCall,
+		),
+	);
+	container.addChild(
+		renderExactResult(
+			options.result,
+			{ expanded: true, isPartial: false },
+			options.theme,
+			exactContext,
+			options.originalResult,
+		),
+	);
+	return container;
+}
+
 export function withCompactRenderer(
 	definition: ToolDefinition<any, any, any>,
 	store: ToolSummaryStore,
@@ -95,9 +206,6 @@ export function withCompactRenderer(
 		renderShell: "self",
 		renderCall(args, theme, context) {
 			const normalizedArgs = asArgs(args);
-			if (context.expanded) {
-				return renderExactCall(toolName, normalizedArgs, theme, context, originalCall);
-			}
 			if (!context.isPartial) {
 				return updateText(context.lastComponent, "");
 			}
@@ -111,6 +219,20 @@ export function withCompactRenderer(
 				store.getDurationMs(context.toolCallId),
 			);
 			if (!state.semantic) facts.push("summarizing…");
+			if (context.expanded) {
+				return renderExpandedCall({
+					toolName,
+					args: normalizedArgs,
+					summary: semantic.running,
+					facts,
+					started: context.executionStarted,
+					startedAt: state.startedAt,
+					batch: state.batch,
+					theme,
+					context,
+					original: originalCall,
+				});
+			}
 			const value = renderCompactText({
 				marker: context.executionStarted ? spinner(state.startedAt) : "○",
 				markerColor: context.executionStarted ? "accent" : "dim",
@@ -121,8 +243,14 @@ export function withCompactRenderer(
 			return updateText(context.lastComponent, value);
 		},
 		renderResult(result, options, theme, context) {
-			if (options.expanded) {
-				return renderExactResult(result, options, theme, context, originalResult);
+			if (options.expanded && options.isPartial) {
+				return renderExactResult(
+					result,
+					options,
+					theme,
+					freshRenderContext(context),
+					originalResult,
+				);
 			}
 			if (options.isPartial) {
 				return updateText(context.lastComponent, "");
@@ -145,10 +273,28 @@ export function withCompactRenderer(
 						isError: context.isError,
 						durationMs: store.getDurationMs(context.toolCallId),
 					});
+			const semanticSummary = context.isError ? semantic.failure : semantic.success;
+			if (options.expanded) {
+				return renderExpandedResult({
+					toolName,
+					args: normalizedArgs,
+					result,
+					semanticSummary,
+					facts: observed.facts,
+					errorTail: observed.errorTail,
+					summaryError: persisted?.summaryError,
+					batch: persisted?.batch ?? runtime?.batch,
+					isError: context.isError,
+					theme,
+					context,
+					originalCall,
+					originalResult,
+				});
+			}
 			const value = renderCompactText({
 				marker: context.isError ? "✗" : "✓",
 				markerColor: context.isError ? "error" : "success",
-				summary: context.isError ? semantic.failure : semantic.success,
+				summary: semanticSummary,
 				facts: observed.facts,
 				errorTail: observed.errorTail,
 				theme,

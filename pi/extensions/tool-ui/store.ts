@@ -1,5 +1,6 @@
 import type {
 	RuntimeToolState,
+	ToolBatchInfo,
 	ToolSemanticSummary,
 } from "./types.ts";
 
@@ -35,6 +36,13 @@ export class ToolSummaryStore {
 	bindInvalidator(toolCallId: string, invalidate: () => void): void {
 		const state = this.states.get(toolCallId);
 		if (state) state.invalidate = invalidate;
+	}
+
+	setBatch(toolCallId: string, batch: ToolBatchInfo): void {
+		const state = this.states.get(toolCallId);
+		if (!state) return;
+		state.batch = batch;
+		state.invalidate?.();
 	}
 
 	setSemantic(toolCallId: string, semantic: ToolSemanticSummary): void {

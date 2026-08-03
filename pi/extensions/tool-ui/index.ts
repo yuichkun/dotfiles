@@ -26,6 +26,9 @@ import {
 
 interface SummaryBatchHandle {
 	promise: Promise<ToolSummaryBatchResult>;
+	batchId: string;
+	batchSize: number;
+	indexByToolCallId: Map<string, number>;
 	chargeToolCallId: string;
 	usageCharged: boolean;
 }
@@ -148,8 +151,16 @@ export default function compactToolUiExtension(pi: ExtensionAPI): void {
 
 		const calls = getToolCalls(event.message.content);
 		if (calls.length === 0) return;
-		for (const call of calls) {
+		const batchId = calls[0]!.id;
+		const indexByToolCallId = new Map<string, number>();
+		for (const [index, call] of calls.entries()) {
 			store.ensure(call.id, call.name, call.arguments);
+			indexByToolCallId.set(call.id, index + 1);
+			store.setBatch(call.id, {
+				id: batchId,
+				index: index + 1,
+				size: calls.length,
+			});
 		}
 
 		const promise = summarizeToolCalls({
@@ -168,7 +179,10 @@ export default function compactToolUiExtension(pi: ExtensionAPI): void {
 		});
 		const handle: SummaryBatchHandle = {
 			promise,
-			chargeToolCallId: calls[0]!.id,
+			batchId,
+			batchSize: calls.length,
+			indexByToolCallId,
+			chargeToolCallId: batchId,
 			usageCharged: false,
 		};
 		for (const call of calls) batchesByToolCallId.set(call.id, handle);
@@ -193,6 +207,7 @@ export default function compactToolUiExtension(pi: ExtensionAPI): void {
 			isError: event.isError,
 			durationMs,
 		});
+		const batchIndex = handle?.indexByToolCallId.get(event.toolCallId);
 		const metadata = {
 			version: COMPACT_TOOL_UI_VERSION,
 			semantic,
@@ -201,6 +216,10 @@ export default function compactToolUiExtension(pi: ExtensionAPI): void {
 			durationMs,
 			generator: batch?.summaries.has(event.toolCallId) ? batch.generator : undefined,
 			summaryError: batch?.summaries.has(event.toolCallId) ? undefined : batch?.error,
+			batch:
+				handle && batchIndex
+					? { id: handle.batchId, index: batchIndex, size: handle.batchSize }
+					: runtime.batch,
 		};
 
 		let usage = event.usage;
