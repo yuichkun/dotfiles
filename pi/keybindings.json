@@ -1,4 +1,4 @@
 {
-  "app.tools.expand": [],
+  "app.tools.expand": ["ctrl+o"],
   "app.thinking.toggle": []
 }

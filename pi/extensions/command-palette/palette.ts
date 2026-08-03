@@ -2,7 +2,6 @@ import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
 	fuzzyFilter,
 	Input,
-	matchesKey,
 	truncateToWidth,
 } from "@earendil-works/pi-tui";
 import { BaseModal, showModal, type ModalContext } from "../shared/modal.ts";
@@ -11,7 +10,6 @@ import type {
 	CommandPaletteAction,
 	CommandPaletteRegistry,
 } from "./registry.ts";
-import { COMMAND_PALETTE_SHORTCUT } from "./shortcut.ts";
 
 const MIN_VISIBLE_ACTION_ROWS = 5;
 const MAX_VISIBLE_ACTIONS = 8;
@@ -47,10 +45,7 @@ class CommandPaletteComponent extends BaseModal<string> {
 	}
 
 	override handleInput(data: string): void {
-		if (
-			matchesKey(data, COMMAND_PALETTE_SHORTCUT) ||
-			this.isCancelInput(data)
-		) {
+		if (this.isCancelInput(data)) {
 			this.cancel();
 			return;
 		}
