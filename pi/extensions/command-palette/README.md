@@ -6,6 +6,7 @@ Pi内の決定的なローカルUI操作を、対話・prompt・skillとは別�
 
 現在のAction：
 
+- `Open Plan Dashboard…`：現在のSession branchにあるLiving Planを開く
 - `Open in VS Code…`：独立したWorkspace Pickerを開き、現在または別のWorkspaceを選択する
 
 ## Actionの追加

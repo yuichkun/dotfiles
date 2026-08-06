@@ -4,6 +4,8 @@
   "defaultModel": "gpt-5.6-sol",
   "defaultThinkingLevel": "xhigh",
   "packages": [],
-  "lastChangelogVersion": "0.83.0",
-  "hideThinkingBlock": true
+  "lastChangelogVersion": "0.84.0",
+  "hideThinkingBlock": true,
+  "tuiMode": "fullscreen",
+  "fullscreenScrollbar": "auto"
 }

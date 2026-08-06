@@ -1,0 +1,99 @@
+# Living Plan
+
+Pi 0.84.0のSessionへ、依存関係付きのLiving Planを保存・復元・表示するExtension。
+Plan Modeや権限制御は導入せず、ユーザーが`/plan`を実行したSessionだけでPlanを継続管理する。
+
+## Planの作成
+
+タスクを引数としてワンショットWorkflowを起動する。
+
+```text
+/plan Passkey認証を追加し、既存ログインから移行できるようにする
+```
+
+引数を省略すると、タスクを記入するmulti-line editorが開く。
+
+```text
+/plan
+```
+
+`/plan`を実行していないSessionでは、Planの自動作成、context注入、staleness計測を一切行わない。
+
+### 初回Workflow
+
+1. タスクを通常のUser MessageとしてSessionへ追加する。
+2. Agentが要求とコードベースを調査する。
+3. `plan` Toolの`consult` operationが、要求の逐語、確認済み事実、制約、未決事項をFableへ渡す。
+4. Fableの独立した回答をAgentが評価する。
+5. Agentが`set` operationで依存関係付きPlanを保存し、通常作業を続行する。
+
+Fableは次の固定条件で実行する。
+
+```bash
+claude -p --model fable --effort max --safe-mode --tools "" --no-session-persistence
+```
+
+相談packetにはAgent側のPlan候補や望ましい結論を含めない。初回`set`は、現在のSession branchに保存された成功済みconsultation IDがなければ拒否する。
+
+## 継続更新
+
+Planが存在する場合だけ、Piの`context` eventで毎回のLLM callへ最新digestを追加する。
+
+```text
+Plan <id> r7
+Current: S04 — parserを実装する
+Ready: S05, S06
+```
+
+`plan` Toolは次のoperationを持つ。
+
+- `get`: 構造的replanに必要な完全snapshotを取得する
+- `consult`: 初回または構造的replanの前にFableへ相談する
+- `set`: Plan全体を作成・改訂する。省略した既存Stepは`superseded`になる
+- `progress`: 現在Stepの完了とReady Stepの開始をatomicに更新する
+
+Step境界では`progress`、前提、Step、順序、依存関係が変わった場合は`set`を使う。通常の更新ではユーザー確認を待たない。要求済み成果物の削除・延期、完了条件の緩和、ユーザーの明示決定との矛盾、完了済み作業の巻き戻しだけは先に確認する。
+
+最後のPlan更新から成功した`edit`、`write`、`bash`が5回、または4 turn経過するとdigestの同期要求を強める。12回または8 turnではcompactな全Step状態も注入する。追加turnや通常Toolのblockは行わない。
+
+## 保存とbranch
+
+Plan作成要求はCustom Entry、Fable consultationとPlan snapshotは`plan` Tool Resultの`details`へ保存する。各Plan変更はrevision、理由、完全snapshotを持つ。
+
+`session_start`と`session_tree`で現在の`getBranch()`だけを走査するため、rewindや兄弟branchはそれぞれ異なるPlanと進捗を保持できる。別Sessionへは自動継承しない。
+
+## Dashboard
+
+- `/palette` → `Open Plan Dashboard…`
+- `/plan-dashboard`
+
+画面最上部のfixed Overlayにはprogress barと現在Stepを表示する。PlanがないbranchではOverlayを表示しない。staleness thresholdを超えた場合は、最後の更新以降のwork/turn数を表示する。
+
+### Overview
+
+- `←` / `→`: 前後のstageへ移動
+- `↑` / `↓`: 同じstage内を移動
+- `Tab`: 実行中・着手可能Stepを巡回
+- `d`: 選択Stepの祖先・子孫経路を強調
+- `0` / `Home`: 実行中Stepへ戻る
+- `Enter`: 選択Stepの詳細
+- `Esc`: 閉じる
+
+### Detail
+
+- `↑` / `↓`: scroll
+- `PageUp` / `PageDown`: page scroll
+- `Esc`: Overviewへ戻る
+
+## 検証規則
+
+- Step IDはPlan内で一意
+- 依存先は同じPlan内に存在する
+- 循環依存と自己依存は禁止
+- `in_progress`は最大1件
+- unresolvedな依存を持つStepは開始・完了できない
+- 古い`baseRevision`からの更新は禁止
+- Plan改訂で省略された既存Stepは削除せず`superseded`にする
+- `progress`では`in_progress`のStepだけを完了できる
+
+Dashboardが保存データと一致すること、stalenessの件数、DAG整合性は機械的に保証する。Plan内容が現実を正しく表しているか、意味上の完了条件を満たしたかはモデルの判断を含むため、完全には保証しない。
