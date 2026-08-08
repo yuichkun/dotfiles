@@ -1,8 +1,12 @@
-import type {
-	Theme,
-	ToolDefinition,
+import {
+	getLanguageFromPath,
+	highlightCode,
+	keyHint,
+	renderDiff,
+	type Theme,
+	type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
-import { Container, Spacer, Text, type Component } from "@earendil-works/pi-tui";
+import { Text, type Component } from "@earendil-works/pi-tui";
 import {
 	getCompactMetadata,
 	getFallbackSemantic,
@@ -10,17 +14,41 @@ import {
 	getResultFacts,
 	getTextOutput,
 } from "./facts.ts";
+import {
+	CachedCompositeComponent,
+	IndentedComponent,
+} from "./indented-component.ts";
 import { colorizeExpandedToolOutput } from "./output-color.ts";
 import type { ToolSummaryStore } from "./store.ts";
+import { ToolHeaderComponent, type ToolHeaderOptions } from "./tool-header.ts";
 import type { ToolBatchInfo } from "./types.ts";
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const SPINNER_INTERVAL_MS = 120;
+const MUTATION_PREVIEW_LINES = 6;
 
 type AnyRenderCall = NonNullable<ToolDefinition<any, any, any>["renderCall"]>;
 type AnyRenderResult = NonNullable<ToolDefinition<any, any, any>["renderResult"]>;
 type AnyRenderContext = Parameters<AnyRenderCall>[2];
 type AnyToolResult = Parameters<AnyRenderResult>[0];
+
+const EXPANDED_RESULT_CACHE = Symbol("compact-tool-ui-expanded-result");
+
+interface ExpandedResultCache {
+	args: Record<string, unknown>;
+	content: AnyToolResult["content"];
+	details: AnyToolResult["details"];
+	isError: boolean;
+	showImages: boolean;
+	themeKey: string;
+	component: Component;
+}
+
+function getThemeCacheKey(theme: Theme): string {
+	return ["text", "muted", "dim", "success", "error", "warning", "toolOutput"]
+		.map((color) => theme.getFgAnsi(color as Parameters<Theme["getFgAnsi"]>[0]))
+		.join("|");
+}
 
 function asArgs(value: unknown): Record<string, unknown> {
 	return value && typeof value === "object"
@@ -39,66 +67,23 @@ function spinner(startedAt: number | undefined): string {
 	return SPINNER_FRAMES[Math.floor(elapsed / SPINNER_INTERVAL_MS) % SPINNER_FRAMES.length]!;
 }
 
-function renderFact(fact: string, index: number, theme: Theme): string {
-	if (index === 0) return theme.bold(theme.fg("accent", fact));
-
-	const diff = fact.match(/^\+(\d+)\s*\/\s*-(\d+)$/);
-	if (diff) {
-		return `${theme.fg("toolDiffAdded", `+${diff[1]}`)} ${theme.fg("dim", "/")} ${theme.fg("toolDiffRemoved", `-${diff[2]}`)}`;
-	}
-	const tests = fact.match(/^(\d+ passed)\s*\/\s*(\d+ failed)$/i);
-	if (tests) {
-		return `${theme.fg("success", tests[1]!)} ${theme.fg("dim", "/")} ${theme.fg("error", tests[2]!)}`;
-	}
-	const running = fact.match(/^running\s+(.+)$/i);
-	if (running) {
-		return `${theme.fg("warning", "running")} ${theme.fg("dim", running[1]!)}`;
-	}
-	if (/^\d+(?:\.\d+)?s$/.test(fact) || /^batch call \d+\/\d+$/.test(fact)) {
-		return theme.fg("dim", fact);
-	}
-	if (/\b(?:failed|error|exit|fatal)\b/i.test(fact)) return theme.fg("error", fact);
-	if (/\b(?:passed|passing|success)\b/i.test(fact)) return theme.fg("success", fact);
-	if (/\b(?:truncated|warning|no matches|summarizing)\b/i.test(fact)) {
-		return theme.fg("warning", fact);
-	}
-	if (/^“.*”$/.test(fact)) return theme.fg("warning", fact);
-	if (fact.startsWith("~") || fact.startsWith("/") || fact.includes("/") || /\.[A-Za-z0-9]+(?::\d+(?:-\d+)?)?$/.test(fact)) {
-		return theme.fg("accent", fact);
-	}
-	return theme.fg("text", fact);
+function formatRunningDuration(startedAt: number | undefined): string | undefined {
+	if (startedAt === undefined) return undefined;
+	const durationMs = Math.max(0, Date.now() - startedAt);
+	if (durationMs < 10_000) return `${Math.max(0.1, durationMs / 1000).toFixed(1)}s`;
+	return `${Math.round(durationMs / 1000)}s`;
 }
 
-function renderFacts(facts: readonly string[], theme: Theme): string {
-	const visibleFacts = facts.filter((fact) => fact !== "completed");
-	return visibleFacts
-		.map((fact, index) => renderFact(fact, index, theme))
-		.join(theme.fg("dim", " · "));
-}
-
-function renderCompactText(options: {
-	marker: string;
-	markerColor: Parameters<Theme["fg"]>[0];
-	summary: string;
-	facts: readonly string[];
-	errorTail?: string;
-	summaryError?: string;
-	theme: Theme;
-}): string {
-	const { theme } = options;
-	let text = `${theme.fg(options.markerColor, options.marker)} ${theme.fg("text", options.summary)}`;
-	const facts = renderFacts(options.facts, theme);
-	if (facts) {
-		text += `\n  ${facts}`;
-	}
-	if (options.errorTail) {
-		text += `\n  ${theme.fg("error", `last: ${options.errorTail}`)}`;
-	}
-	if (options.summaryError) {
-		const reason = options.summaryError.replace(/\s+/g, " ").trim().slice(0, 180);
-		text += `\n  ${theme.fg("warning", `⚠ summary fallback: ${reason}`)}`;
-	}
-	return text;
+function updateHeader(
+	lastComponent: Component | undefined,
+	options: ToolHeaderOptions,
+): ToolHeaderComponent {
+	const component =
+		lastComponent instanceof ToolHeaderComponent
+			? lastComponent
+			: new ToolHeaderComponent(options);
+	component.setOptions(options);
+	return component;
 }
 
 function withBatchFact(facts: readonly string[], batch: ToolBatchInfo | undefined): string[] {
@@ -150,6 +135,53 @@ function renderExactResult(
 	return new Text(theme.fg("text", getTextOutput(result.content)), 0, 0);
 }
 
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+	return value && typeof value === "object" && !Array.isArray(value)
+		? (value as Record<string, unknown>)
+		: undefined;
+}
+
+function mutationPreview(options: {
+	toolName: string;
+	args: Record<string, unknown>;
+	result: AnyToolResult;
+	theme: Theme;
+}): Component | undefined {
+	let content: string | undefined;
+	if (options.toolName === "edit") {
+		const diff = asRecord(options.result.details)?.diff;
+		if (typeof diff !== "string" || !diff.trim()) return undefined;
+		content = renderDiff(diff, {
+			filePath: typeof options.args.path === "string" ? options.args.path : undefined,
+		});
+	} else if (options.toolName === "write") {
+		const source = typeof options.args.content === "string" ? options.args.content : "";
+		if (!source.trim()) return undefined;
+		const normalized = source.replace(/\r\n?/g, "\n").replace(/\t/g, "   ");
+		const path = typeof options.args.path === "string" ? options.args.path : undefined;
+		const language = path ? getLanguageFromPath(path) : undefined;
+		content = language
+			? highlightCode(normalized, language).join("\n")
+			: normalized
+					.split("\n")
+					.map((line) => options.theme.fg("toolOutput", line))
+					.join("\n");
+	} else {
+		return undefined;
+	}
+
+	return new IndentedComponent(new Text(content, 0, 0), {
+		indent: 4,
+		maxLines: MUTATION_PREVIEW_LINES,
+		overflowText: (remaining) =>
+			options.theme.fg("dim", `… ${remaining} more lines (${keyHint("app.tools.expand", "to expand")})`),
+	});
+}
+
+function nested(component: Component): Component {
+	return new IndentedComponent(component, { indent: 4 });
+}
+
 function renderExpandedCall(options: {
 	toolName: string;
 	args: Record<string, unknown>;
@@ -162,31 +194,30 @@ function renderExpandedCall(options: {
 	context: AnyRenderContext;
 	original?: ToolDefinition<any, any, any>["renderCall"];
 }): Component {
-	const container = new Container();
-	container.addChild(
-		new Text(
-			renderCompactText({
-				marker: options.started ? spinner(options.startedAt) : "○",
-				markerColor: options.started ? "accent" : "dim",
-				summary: options.summary,
-				facts: withBatchFact(options.facts, options.batch),
-				theme: options.theme,
-			}),
-			0,
-			0,
+	return new CachedCompositeComponent([
+		new ToolHeaderComponent({
+			toolName: options.toolName,
+			args: options.args,
+			status: options.started ? "running" : "pending",
+			marker: options.started ? spinner(options.startedAt) : "○",
+			markerColor: options.started ? "accent" : "dim",
+			semanticSummary: options.summary,
+			facts: withBatchFact(options.facts, options.batch),
+			runningDuration: options.started
+				? formatRunningDuration(options.startedAt)
+				: undefined,
+			theme: options.theme,
+		}),
+		nested(
+			renderExactCall(
+				options.toolName,
+				options.args,
+				options.theme,
+				freshRenderContext(options.context),
+				options.original,
+			),
 		),
-	);
-	container.addChild(new Spacer(1));
-	container.addChild(
-		renderExactCall(
-			options.toolName,
-			options.args,
-			options.theme,
-			freshRenderContext(options.context),
-			options.original,
-		),
-	);
-	return container;
+	]);
 }
 
 function renderExpandedResult(options: {
@@ -204,45 +235,51 @@ function renderExpandedResult(options: {
 	originalCall?: ToolDefinition<any, any, any>["renderCall"];
 	originalResult?: ToolDefinition<any, any, any>["renderResult"];
 }): Component {
-	const container = new Container();
-	container.addChild(
-		new Text(
-			renderCompactText({
-				marker: options.isError ? "✗" : "✓",
-				markerColor: options.isError ? "error" : "success",
-				summary: options.semanticSummary,
-				facts: withBatchFact(options.facts, options.batch),
-				errorTail: options.errorTail,
-				summaryError: options.summaryError,
-				theme: options.theme,
-			}),
-			0,
-			0,
-		),
-	);
-	container.addChild(new Spacer(1));
 	const exactContext = freshRenderContext(options.context);
-	container.addChild(
-		renderExactCall(
-			options.toolName,
-			options.args,
-			options.theme,
-			exactContext,
-			options.originalCall,
+	const children: Component[] = [
+		new ToolHeaderComponent({
+			toolName: options.toolName,
+			args: options.args,
+			status: options.isError ? "error" : "success",
+			marker: options.isError ? "✗" : "●",
+			markerColor: options.isError ? "error" : "success",
+			semanticSummary: options.semanticSummary,
+			facts: withBatchFact(options.facts, options.batch),
+			errorTail: options.errorTail,
+			summaryError: options.summaryError,
+			theme: options.theme,
+		}),
+	];
+	// The built-in edit call renderer recomputes a filesystem diff asynchronously.
+	// Settled results already contain the authoritative diff, so rendering the call
+	// again causes invalidation storms across every historical edit when Ctrl+O opens.
+	if (options.toolName !== "edit") {
+		children.push(
+			nested(
+				renderExactCall(
+					options.toolName,
+					options.args,
+					options.theme,
+					exactContext,
+					options.originalCall,
+				),
+			),
+		);
+	}
+	children.push(
+		nested(
+			renderExactResult(
+				options.toolName,
+				options.args,
+				options.result,
+				{ expanded: true, isPartial: false },
+				options.theme,
+				exactContext,
+				options.originalResult,
+			),
 		),
 	);
-	container.addChild(
-		renderExactResult(
-			options.toolName,
-			options.args,
-			options.result,
-			{ expanded: true, isPartial: false },
-			options.theme,
-			exactContext,
-			options.originalResult,
-		),
-	);
-	return container;
+	return new CachedCompositeComponent(children);
 }
 
 export function withCompactRenderer(
@@ -285,25 +322,32 @@ export function withCompactRenderer(
 					original: originalCall,
 				});
 			}
-			const value = renderCompactText({
+			return updateHeader(context.lastComponent, {
+				toolName,
+				args: normalizedArgs,
+				status: context.executionStarted ? "running" : "pending",
 				marker: context.executionStarted ? spinner(state.startedAt) : "○",
 				markerColor: context.executionStarted ? "accent" : "dim",
-				summary: semantic.running,
+				semanticSummary: semantic.running,
 				facts,
+				runningDuration: context.executionStarted
+					? formatRunningDuration(state.startedAt)
+					: undefined,
 				theme,
 			});
-			return updateText(context.lastComponent, value);
 		},
 		renderResult(result, options, theme, context) {
 			if (options.expanded && options.isPartial) {
-				return renderExactResult(
-					toolName,
-					asArgs(context.args),
-					result,
-					options,
-					theme,
-					freshRenderContext(context),
-					originalResult,
+				return nested(
+					renderExactResult(
+						toolName,
+						asArgs(context.args),
+						result,
+						options,
+						theme,
+						freshRenderContext(context),
+						originalResult,
+					),
 				);
 			}
 			if (options.isPartial) {
@@ -329,7 +373,22 @@ export function withCompactRenderer(
 					});
 			const semanticSummary = context.isError ? semantic.failure : semantic.success;
 			if (options.expanded) {
-				return renderExpandedResult({
+				const state = context.state as Record<PropertyKey, unknown>;
+				const cached = state[EXPANDED_RESULT_CACHE] as
+					| ExpandedResultCache
+					| undefined;
+				const themeKey = getThemeCacheKey(theme);
+				if (
+					cached?.args === normalizedArgs &&
+					cached.content === result.content &&
+					cached.details === result.details &&
+					cached.isError === context.isError &&
+					cached.showImages === context.showImages &&
+					cached.themeKey === themeKey
+				) {
+					return cached.component;
+				}
+				const component = renderExpandedResult({
 					toolName,
 					args: normalizedArgs,
 					result,
@@ -344,16 +403,40 @@ export function withCompactRenderer(
 					originalCall,
 					originalResult,
 				});
+				state[EXPANDED_RESULT_CACHE] = {
+					args: normalizedArgs,
+					content: result.content,
+					details: result.details,
+					isError: context.isError,
+					showImages: context.showImages,
+					themeKey,
+					component,
+				} satisfies ExpandedResultCache;
+				return component;
 			}
-			const value = renderCompactText({
-				marker: context.isError ? "✗" : "✓",
+			const headerOptions: ToolHeaderOptions = {
+				toolName,
+				args: normalizedArgs,
+				status: context.isError ? "error" : "success",
+				marker: context.isError ? "✗" : "●",
 				markerColor: context.isError ? "error" : "success",
-				summary: semanticSummary,
+				semanticSummary,
 				facts: observed.facts,
 				errorTail: observed.errorTail,
 				theme,
+			};
+			if (context.isError) return updateHeader(context.lastComponent, headerOptions);
+			const preview = mutationPreview({
+				toolName,
+				args: normalizedArgs,
+				result,
+				theme,
 			});
-			return updateText(context.lastComponent, value);
+			if (!preview) return updateHeader(context.lastComponent, headerOptions);
+			return new CachedCompositeComponent([
+				new ToolHeaderComponent(headerOptions),
+				preview,
+			]);
 		},
 	};
 }

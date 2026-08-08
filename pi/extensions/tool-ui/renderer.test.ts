@@ -1,0 +1,291 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import {
+	initTheme,
+	type Theme,
+	type ToolDefinition,
+} from "@earendil-works/pi-coding-agent";
+import { Text, stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
+import { attachCompactMetadata } from "./facts.ts";
+import { withCompactRenderer } from "./renderer.ts";
+import { ToolSummaryStore } from "./store.ts";
+import { COMPACT_TOOL_UI_VERSION } from "./types.ts";
+
+initTheme("dark", false);
+
+const plainTheme = {
+	fg: (_color: string, value: string) => value,
+	bold: (value: string) => value,
+	underline: (value: string) => value,
+	getFgAnsi: (color: string) => color,
+} as unknown as Theme;
+
+const semantic = {
+	running: "型定義を修正しています",
+	success: "型定義を修正しました",
+	failure: "型定義の修正に失敗しました",
+};
+
+function cleanLines(lines: string[]): string[] {
+	return lines.map((line) => stripTerminalSequences(line).trimEnd());
+}
+
+function createDefinition(toolName = "edit"): ToolDefinition<any, any, any> {
+	return {
+		name: toolName,
+		label: toolName,
+		description: "test edit tool",
+		parameters: {} as any,
+		async execute() {
+			return { content: [{ type: "text", text: "ok" }], details: {} };
+		},
+		renderCall() {
+			return new Text("exact call\ncommand details", 0, 0);
+		},
+		renderResult() {
+			return new Text("exact result", 0, 0);
+		},
+	};
+}
+
+function createContext(
+	args: Record<string, unknown>,
+	overrides: Record<string, unknown> = {},
+): any {
+	return {
+		args,
+		toolCallId: "call-1",
+		invalidate() {},
+		lastComponent: undefined,
+		state: {},
+		cwd: process.cwd(),
+		executionStarted: true,
+		argsComplete: true,
+		isPartial: false,
+		expanded: false,
+		showImages: true,
+		isError: false,
+		...overrides,
+	};
+}
+
+test("renders pending calls with the same signature hierarchy", () => {
+	const args = { path: "src/index.ts", edits: [] };
+	const store = new ToolSummaryStore();
+	store.ensure("call-1", "edit", args);
+	store.setSemantic("call-1", semantic);
+	store.start("call-1", "edit", args);
+	const definition = withCompactRenderer(createDefinition(), store);
+	const component = definition.renderCall!(
+		args,
+		plainTheme,
+		createContext(args, { isPartial: true }),
+	);
+	const lines = cleanLines(component.render(80));
+	assert.match(lines[0]!, /^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] Update\(src\/index\.ts\) · \d+\.\d+s$/);
+	assert.ok(lines[1]!.startsWith("  └ "));
+	store.clear();
+});
+
+test("renders a collapsed edit preview below the branch", () => {
+	const args = { path: "src/index.ts", edits: [{ oldText: "old", newText: "new" }] };
+	const store = new ToolSummaryStore();
+	store.ensure("call-1", "edit", args);
+	store.setSemantic("call-1", semantic);
+	const definition = withCompactRenderer(createDefinition(), store);
+	const result = {
+		content: [{ type: "text" as const, text: "Successfully replaced 1 block" }],
+		details: { diff: " 1 const value = 1;\n-2 old\n+2 new" },
+	};
+	const component = definition.renderResult!(
+		result,
+		{ expanded: false, isPartial: false },
+		plainTheme,
+		createContext(args),
+	);
+	const lines = cleanLines(component.render(100));
+	assert.equal(lines[0], "● Update(src/index.ts)");
+	assert.match(lines[1]!, /^  └ Added 1 line, removed 1 line · 型定義を修正しました$/);
+	assert.ok(lines.slice(2).every((line) => line.startsWith("    ")));
+	assert.ok(lines.some((line) => line.includes("old")));
+	assert.ok(lines.some((line) => line.includes("new")));
+	for (const line of component.render(100)) assert.ok(visibleWidth(line) <= 100);
+});
+
+test("limits a collapsed write preview and shows the expansion hint", () => {
+	const args = {
+		path: "src/generated.ts",
+		content: Array.from({ length: 10 }, (_, index) => `const value${index + 1} = ${index + 1};`).join("\n"),
+	};
+	const writeSemantic = {
+		running: "生成ファイルを書き込んでいます",
+		success: "生成ファイルを書き込みました",
+		failure: "生成ファイルの書き込みに失敗しました",
+	};
+	const store = new ToolSummaryStore();
+	store.ensure("call-1", "write", args);
+	store.setSemantic("call-1", writeSemantic);
+	const definition = withCompactRenderer(createDefinition("write"), store);
+	const component = definition.renderResult!(
+		{ content: [{ type: "text", text: "ok" }], details: {} },
+		{ expanded: false, isPartial: false },
+		plainTheme,
+		createContext(args),
+	);
+	const lines = cleanLines(component.render(80));
+	assert.equal(lines[0], "● Write(src/generated.ts)");
+	assert.match(lines[1]!, /^  └ Wrote 10 lines · 生成ファイルを書き込みました$/);
+	assert.ok(lines.some((line) => line.includes("const value1 = 1;")));
+	assert.ok(lines.some((line) => line.includes("… 4 more lines")));
+	assert.ok(lines.slice(2).every((line) => line.startsWith("    ")));
+});
+
+test("keeps exact call and result nested when expanded", () => {
+	const args = { path: "src/index.ts" };
+	const readSemantic = {
+		running: "実装を確認しています",
+		success: "実装を確認しました",
+		failure: "実装の確認に失敗しました",
+	};
+	const store = new ToolSummaryStore();
+	store.ensure("call-1", "read", args);
+	store.setSemantic("call-1", readSemantic);
+	const definition = withCompactRenderer(createDefinition("read"), store);
+	const component = definition.renderResult!(
+		{ content: [{ type: "text", text: "ok" }], details: {} },
+		{ expanded: true, isPartial: false },
+		plainTheme,
+		createContext(args, { expanded: true }),
+	);
+	const lines = cleanLines(component.render(80));
+	assert.equal(lines[0], "● Read(src/index.ts)");
+	assert.ok(lines.includes("    exact call"));
+	assert.ok(lines.includes("    command details"));
+	assert.ok(lines.includes("    exact result"));
+});
+
+test("reuses the settled expanded tree across rerenders and Ctrl+O toggles", () => {
+	const args = { path: "src/index.ts" };
+	const result = {
+		content: [{ type: "text" as const, text: "file content" }],
+		details: {},
+	};
+	const readSemantic = {
+		running: "実装を確認しています",
+		success: "実装を確認しました",
+		failure: "実装の確認に失敗しました",
+	};
+	const store = new ToolSummaryStore();
+	store.ensure("call-1", "read", args);
+	store.setSemantic("call-1", readSemantic);
+	const original = createDefinition("read");
+	let callRenderCount = 0;
+	let resultRenderCount = 0;
+	const originalRenderCall = original.renderCall!;
+	const originalRenderResult = original.renderResult!;
+	original.renderCall = (...parameters) => {
+		callRenderCount++;
+		return originalRenderCall(...parameters);
+	};
+	original.renderResult = (...parameters) => {
+		resultRenderCount++;
+		return originalRenderResult(...parameters);
+	};
+	const definition = withCompactRenderer(original, store);
+	const context = createContext(args, { expanded: true });
+	const first = definition.renderResult!(
+		result,
+		{ expanded: true, isPartial: false },
+		plainTheme,
+		context,
+	);
+	const second = definition.renderResult!(
+		result,
+		{ expanded: true, isPartial: false },
+		plainTheme,
+		context,
+	);
+	assert.strictEqual(second, first);
+	assert.equal(callRenderCount, 1);
+	assert.equal(resultRenderCount, 1);
+
+	definition.renderResult!(
+		result,
+		{ expanded: false, isPartial: false },
+		plainTheme,
+		{ ...context, expanded: false },
+	);
+	const reopened = definition.renderResult!(
+		result,
+		{ expanded: true, isPartial: false },
+		plainTheme,
+		context,
+	);
+	assert.strictEqual(reopened, first);
+	assert.equal(callRenderCount, 1);
+	assert.equal(resultRenderCount, 1);
+});
+
+test("does not rerun the asynchronous edit call renderer for settled history", () => {
+	const args = { path: "src/index.ts", edits: [] };
+	const store = new ToolSummaryStore();
+	store.ensure("call-1", "edit", args);
+	store.setSemantic("call-1", semantic);
+	const original = createDefinition();
+	let callRenderCount = 0;
+	const originalRenderCall = original.renderCall!;
+	original.renderCall = (...parameters) => {
+		callRenderCount++;
+		return originalRenderCall(...parameters);
+	};
+	const definition = withCompactRenderer(original, store);
+	const component = definition.renderResult!(
+		{ content: [{ type: "text", text: "ok" }], details: {} },
+		{ expanded: true, isPartial: false },
+		plainTheme,
+		createContext(args, { expanded: true }),
+	);
+	assert.equal(callRenderCount, 0);
+	assert.ok(cleanLines(component.render(80)).includes("    exact result"));
+});
+
+test("renders error details on the branch without a mutation preview", () => {
+	const args = { path: "src/index.ts", edits: [] };
+	const store = new ToolSummaryStore();
+	store.ensure("call-1", "edit", args);
+	store.setSemantic("call-1", semantic);
+	const definition = withCompactRenderer(createDefinition(), store);
+	const component = definition.renderResult!(
+		{ content: [{ type: "text", text: "Permission denied" }], details: {} },
+		{ expanded: false, isPartial: false },
+		plainTheme,
+		createContext(args, { isError: true }),
+	);
+	const lines = cleanLines(component.render(80));
+	assert.equal(lines[0], "✗ Update(src/index.ts)");
+	assert.match(lines[1]!, /^  └ Error: Permission denied · 型定義の修正に失敗しました$/);
+	assert.equal(lines.length, 2);
+});
+
+test("renders persisted metadata without an in-memory summary", () => {
+	const args = { path: "src/resumed.ts", edits: [] };
+	const details = attachCompactMetadata(
+		{},
+		{
+			version: COMPACT_TOOL_UI_VERSION,
+			semantic,
+			facts: ["edit", "src/resumed.ts", "+2 / -0", "0.4s"],
+		},
+	);
+	const definition = withCompactRenderer(createDefinition(), new ToolSummaryStore());
+	const component = definition.renderResult!(
+		{ content: [{ type: "text", text: "ok" }], details },
+		{ expanded: false, isPartial: false },
+		plainTheme,
+		createContext(args),
+	);
+	assert.deepEqual(cleanLines(component.render(100)), [
+		"● Update(src/resumed.ts)",
+		"  └ Added 2 lines, removed 0 lines · 0.4s · 型定義を修正しました",
+	]);
+});

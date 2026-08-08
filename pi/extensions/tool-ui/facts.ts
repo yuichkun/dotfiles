@@ -66,7 +66,7 @@ function formatDuration(durationMs: number | undefined): string | undefined {
 	return `${Math.round(durationMs / 1000)}s`;
 }
 
-function getCommandLabel(command: string): string {
+export function getCommandLabel(command: string): string {
 	const semanticLabels: string[] = [];
 	const addLabel = (label: string) => {
 		if (!semanticLabels.includes(label)) semanticLabels.push(label);
@@ -104,7 +104,10 @@ function getCommandLabel(command: string): string {
 	return labels.length > 0 ? labels.join(" + ") : "shell command";
 }
 
-function getPath(args: Record<string, unknown>, fallback = "."): string {
+export function getToolPath(
+	args: Record<string, unknown>,
+	fallback = ".",
+): string {
 	return shortenPath(asString(args.path) ?? fallback);
 }
 
@@ -143,7 +146,7 @@ export function getFallbackSemantic(
 	toolName: string,
 	args: Record<string, unknown>,
 ): ToolSemanticSummary {
-	const path = getPath(args);
+	const path = getToolPath(args);
 	const pattern = asString(args.pattern);
 
 	switch (toolName) {
@@ -211,7 +214,7 @@ export function getLiveFacts(
 	durationMs: number | undefined,
 ): string[] {
 	const facts: string[] = [toolName];
-	const path = getPath(args);
+	const path = getToolPath(args);
 
 	switch (toolName) {
 		case "read": {
@@ -263,7 +266,7 @@ export function getResultFacts(options: {
 	const { toolName, args, content, details, isError, durationMs } = options;
 	const output = getText(content);
 	const facts: string[] = [toolName];
-	const path = getPath(args);
+	const path = getToolPath(args);
 
 	switch (toolName) {
 		case "read": {
