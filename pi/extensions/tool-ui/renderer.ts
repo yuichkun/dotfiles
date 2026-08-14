@@ -14,6 +14,7 @@ import {
 	getResultFacts,
 	getTextOutput,
 } from "./facts.ts";
+import { paint } from "../shared/color-policy.ts";
 import {
 	CachedCompositeComponent,
 	IndentedComponent,
@@ -26,6 +27,7 @@ import type { ToolBatchInfo } from "./types.ts";
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const SPINNER_INTERVAL_MS = 120;
 const MUTATION_PREVIEW_LINES = 6;
+const COMPLETED_MARKER = "⏺";
 
 type AnyRenderCall = NonNullable<ToolDefinition<any, any, any>["renderCall"]>;
 type AnyRenderResult = NonNullable<ToolDefinition<any, any, any>["renderResult"]>;
@@ -107,7 +109,7 @@ function renderExactCall(
 ): Component {
 	if (original) return original(args, theme, context);
 	return new Text(
-		`${theme.fg("toolTitle", theme.bold(toolName))}\n${theme.fg("toolOutput", JSON.stringify(args, null, 2))}`,
+		`${theme.fg("toolTitle", theme.bold(toolName))}\n${paint(theme, "primary", JSON.stringify(args, null, 2))}`,
 		0,
 		0,
 	);
@@ -132,7 +134,7 @@ function renderExactResult(
 		if (colored !== undefined) return new Text(colored, 0, 0);
 	}
 	if (original) return original(result, options, theme, context);
-	return new Text(theme.fg("text", getTextOutput(result.content)), 0, 0);
+	return new Text(paint(theme, "primary", getTextOutput(result.content)), 0, 0);
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -164,7 +166,7 @@ function mutationPreview(options: {
 			? highlightCode(normalized, language).join("\n")
 			: normalized
 					.split("\n")
-					.map((line) => options.theme.fg("toolOutput", line))
+					.map((line) => paint(options.theme, "primary", line))
 					.join("\n");
 	} else {
 		return undefined;
@@ -206,6 +208,7 @@ function renderExpandedCall(options: {
 			runningDuration: options.started
 				? formatRunningDuration(options.startedAt)
 				: undefined,
+			cwd: options.context.cwd,
 			theme: options.theme,
 		}),
 		nested(
@@ -241,12 +244,13 @@ function renderExpandedResult(options: {
 			toolName: options.toolName,
 			args: options.args,
 			status: options.isError ? "error" : "success",
-			marker: options.isError ? "✗" : "●",
+			marker: COMPLETED_MARKER,
 			markerColor: options.isError ? "error" : "success",
 			semanticSummary: options.semanticSummary,
 			facts: withBatchFact(options.facts, options.batch),
 			errorTail: options.errorTail,
 			summaryError: options.summaryError,
+			cwd: options.context.cwd,
 			theme: options.theme,
 		}),
 	];
@@ -333,6 +337,7 @@ export function withCompactRenderer(
 				runningDuration: context.executionStarted
 					? formatRunningDuration(state.startedAt)
 					: undefined,
+				cwd: context.cwd,
 				theme,
 			});
 		},
@@ -418,11 +423,12 @@ export function withCompactRenderer(
 				toolName,
 				args: normalizedArgs,
 				status: context.isError ? "error" : "success",
-				marker: context.isError ? "✗" : "●",
+				marker: COMPLETED_MARKER,
 				markerColor: context.isError ? "error" : "success",
 				semanticSummary,
 				facts: observed.facts,
 				errorTail: observed.errorTail,
+				cwd: context.cwd,
 				theme,
 			};
 			if (context.isError) return updateHeader(context.lastComponent, headerOptions);

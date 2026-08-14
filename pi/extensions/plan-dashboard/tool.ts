@@ -152,6 +152,7 @@ export function registerPlanTool(
 		],
 		parameters: PlanToolParameters,
 		executionMode: "sequential",
+		renderShell: "self",
 		async execute(_toolCallId, params, signal, _onUpdate) {
 			switch (params.op) {
 				case "get": {
@@ -322,7 +323,7 @@ export function registerPlanTool(
 			}
 			if (details.kind === "consultation") {
 				return new Text(
-					paint(theme, "completed", "Fable consultation complete"),
+					paint(theme, "completed", "● Fable consultation complete"),
 					0,
 					0,
 				);
@@ -338,7 +339,7 @@ export function registerPlanTool(
 				paint(
 					theme,
 					"completed",
-					`Plan r${details.plan.revision} · ${details.operation}`,
+					`● Plan r${details.plan.revision} · ${details.operation}`,
 				),
 				0,
 				0,

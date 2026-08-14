@@ -7,8 +7,8 @@ Built-in Toolの実行処理を維持したまま、Toolごとの表示をコン
 Built-in Toolを、Claude Codeに近い3段の視覚階層で表示する。
 
 ```text
-● Update(packages/core/src/types.ts)
-  └ Added 1 line, removed 1 line · 型定義を修正しました
+⏺ Update(packages/core/src/types.ts)
+  ⎿  Added 1 line, removed 1 line · 型定義を修正しました · 0.4s
     997  ? { readonly [K in keyof P]: AudioParam }
     998  : Record<string, AudioParam>;
     999  readonly state: C extends { state: infer S }
@@ -17,16 +17,16 @@ Built-in Toolを、Claude Codeに近い3段の視覚階層で表示する。
 ```
 
 - 1段目: status markerと`Name(arguments)`形式のTool signature
-- 2段目: `  └ `に続く実行結果のfacts。LLM semantic summaryは重複しない場合だけfactsの後ろへ併記
+- 2段目: `  ⎿  `に続く実行結果のfacts。LLM semantic summaryは重複しない場合だけfactsの後ろへ併記し、完了durationを末尾へ置く
 - 3段目: `    `で始まるcompact previewまたはexpanded detail
 
-Tool signatureは`Read(path)`、`Update(path)`、`Write(path)`、`Bash(command summary)`、`Search(pattern, path)`、`Find(pattern, path)`、`List(path)`へ正規化する。Pending durationは1段目の末尾、error summaryは2段目の先頭へ置く。長い2段目は同じcontent columnで折り返し、狭いterminalではcontent widthを確保するためindentを縮める。
+Tool signatureは`Read(path)`、`Update(path)`、`Write(path)`、`Bash(command summary)`、`Search(pattern, path)`、`Find(pattern, path)`、`List(path)`へ正規化する。Bashも完了後にsignatureを残し、observed factsとsemantic summaryを表示する。Pending durationは1段目の末尾、error summaryは2段目の先頭へ置く。長い2段目は同じcontent columnで折り返し、狭いterminalではcontent widthを確保するためindentを縮める。
 
 EditとWriteは通常表示でも最大6行のpreviewを出し、残りがあれば件数と`Ctrl+O`のhintを表示する。それ以外のToolの生outputは通常表示では畳む。Custom ToolとMCP ToolはこのExtensionの対象外で、登録元のrendererをそのまま使う。
 
 LLM summaryが到着するまではTool名・path・command種別から作るfallbackを表示する。Summary生成はTool processの開始をblockせず、同じAssistant message内のTool Call群を1回で要約する。要約には直近の会話、現在のuser goal、非表示のthinking summary、正規化したTool引数を渡し、現在のmodelをminimal reasoningで使用する。
 
-配色、Assistant／User message、入力欄、Footer、iTerm2 profileはこのExtensionの対象外とする。
+配色は[`../COLOR_POLICY.md`](../COLOR_POLICY.md)のsemantic roleに従う。Assistant／User message、入力欄、Footer、iTerm2 profileはこのExtensionの対象外とする。
 
 ## 詳細表示
 
@@ -34,7 +34,7 @@ LLM summaryが到着するまではTool名・path・command種別から作るfal
 
 Expanded表示では同じ3段構造を保ち、3段目へ正確な引数・command・全output・全diffをinline表示する。同じAssistant messageに複数Tool Callがある場合は`batch call 2/4`のように位置をfactsへ併記し、LLM summaryがfallbackした場合は展開時だけ理由を表示する。
 
-Factsはtarget・件数・成功／失敗・duration等を意味別に配色する。Expanded outputはReadのsyntax highlightingとEditのdiff rendererを維持し、Bashでは安全なSGR colorだけを保持してcursor操作等のterminal control sequenceを除去する。ANSI colorがないBash outputとGrep／Find／Ls outputには共通のsemantic colorを適用する。
+Factsはtarget・件数・成功／失敗・duration等を意味別に配色する。Expanded outputはReadのsyntax highlightingとEditのPi built-in diff rendererを維持し、Bashでは安全なSGR colorだけを保持してcursor操作等のterminal control sequenceを除去する。ANSI colorがないBash outputとGrep／Find／Ls outputには共通のsemantic colorを適用する。
 
 ## 永続化
 

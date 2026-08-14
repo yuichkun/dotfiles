@@ -37,7 +37,7 @@ test("maps built-in tools to Claude-style signatures", () => {
 	);
 });
 
-test("formats deterministic edit facts before the semantic summary", () => {
+test("keeps deterministic edit facts, semantic summary, and duration", () => {
 	assert.deepEqual(
 		getBranchParts({
 			toolName: "edit",
@@ -46,11 +46,11 @@ test("formats deterministic edit facts before the semantic summary", () => {
 			semanticSummary: "型定義を修正しました",
 			status: "success",
 		}),
-		["Added 1 line, removed 3 lines", "0.3s", "型定義を修正しました"],
+		["Added 1 line, removed 3 lines", "型定義を修正しました", "0.3s"],
 	);
 });
 
-test("removes signature facts and live duration from branch content", () => {
+test("keeps live summarizing state alongside semantic purpose", () => {
 	assert.deepEqual(
 		getBranchParts({
 			toolName: "read",
@@ -72,7 +72,7 @@ test("uses Claude-style shell activity wording and keeps result facts", () => {
 			semanticSummary: "Tool UIの回帰テストを実行しました",
 			status: "success",
 		}),
-		["Ran 1 shell command", "8 tests passed", "1.5s", "Tool UIの回帰テストを実行しました"],
+		["Ran 1 shell command", "8 tests passed", "Tool UIの回帰テストを実行しました", "1.5s"],
 	);
 });
 
@@ -99,7 +99,7 @@ test("suppresses deterministic fallback summaries that repeat signature argument
 	);
 });
 
-test("keeps a purpose summary even when it mentions the signature argument", () => {
+test("keeps deterministic Bash facts and generated purpose prose", () => {
 	assert.deepEqual(
 		getBranchParts({
 			toolName: "bash",
@@ -109,6 +109,19 @@ test("keeps a purpose summary even when it mentions the signature argument", () 
 			status: "success",
 		}),
 		["Ran 1 shell command", "8 tests passed", "Tool UIの回帰を防ぐため、testsを実行しました"],
+	);
+});
+
+test("keeps a semantic summary when a custom Tool has no deterministic fact", () => {
+	assert.deepEqual(
+		getBranchParts({
+			toolName: "custom",
+			args: {},
+			facts: ["custom"],
+			semanticSummary: "目的の処理を完了しました",
+			status: "success",
+		}),
+		["目的の処理を完了しました"],
 	);
 });
 

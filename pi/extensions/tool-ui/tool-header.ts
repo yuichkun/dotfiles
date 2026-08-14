@@ -1,11 +1,17 @@
+import { homedir } from "node:os";
+import { isAbsolute, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import {
+	getCapabilities,
+	hyperlink,
 	sliceByColumn,
 	truncateToWidth,
 	visibleWidth,
 	wrapTextWithAnsi,
 	type Component,
 } from "@earendil-works/pi-tui";
+import { paint } from "../shared/color-policy.ts";
 import {
 	getBranchParts,
 	getToolSignature,
@@ -24,6 +30,7 @@ export interface ToolHeaderOptions {
 	errorTail?: string;
 	summaryError?: string;
 	runningDuration?: string;
+	cwd?: string;
 	theme: Theme;
 }
 
@@ -72,45 +79,67 @@ function fitArguments(
 	});
 }
 
-function styleArgument(argument: SignatureArgument, theme: Theme): string {
-	switch (argument.kind) {
-		case "path":
-			return theme.underline(theme.fg("text", argument.text));
-		case "pattern":
-			return theme.fg("warning", argument.text);
-		case "command":
-			return theme.fg("muted", argument.text);
-		default:
-			return theme.fg("text", argument.text);
+function pathHref(value: string, cwd: string | undefined): string | undefined {
+	if (!cwd || !value || value === "?") return undefined;
+	const withoutLocation = value.replace(/:\d+(?:-\d+)?$/, "");
+	const expanded = withoutLocation === "~"
+		? homedir()
+		: withoutLocation.startsWith("~/")
+			? resolve(homedir(), withoutLocation.slice(2))
+			: withoutLocation;
+	const absolute = isAbsolute(expanded) ? expanded : resolve(cwd, expanded);
+	return pathToFileURL(absolute).href;
+}
+
+function styleArgument(
+	argument: SignatureArgument,
+	original: SignatureArgument,
+	theme: Theme,
+	cwd: string | undefined,
+): string {
+	const primary = paint(theme, "primary", argument.text);
+	const href = original.kind === "path" ? pathHref(original.text, cwd) : undefined;
+	return href && getCapabilities().hyperlinks ? hyperlink(primary, href) : primary;
+}
+
+function countedPhrase(part: string, theme: Theme): string | undefined {
+	const diff = part.match(/^Added (\d+) (lines?), removed (\d+) (lines?)$/);
+	if (diff) {
+		return `Added ${theme.bold(diff[1]!)} ${diff[2]}, removed ${theme.bold(diff[3]!)} ${diff[4]}`;
 	}
+	const shell = part.match(/^Ran (\d+) shell (commands?)$/);
+	if (shell) {
+		return theme.fg("muted", `Ran ${theme.bold(shell[1]!)} shell ${shell[2]}`);
+	}
+	return undefined;
 }
 
 function styleBranchPart(part: string, semanticSummary: string, theme: Theme): string {
+	if (part === semanticSummary) return paint(theme, "primary", part);
+	const counted = countedPhrase(part, theme);
+	if (counted) return counted;
 	if (part.startsWith("Error:") || /\b(?:failed|fatal)\b/i.test(part)) {
 		return theme.fg("error", part);
 	}
-	const diff = part.match(/^Added (\d+ lines?), removed (\d+ lines?)$/);
-	if (diff) {
-		return `${theme.fg("toolDiffAdded", `Added ${diff[1]}`)}${theme.fg("dim", ", ")}${theme.fg("toolDiffRemoved", `removed ${diff[2]}`)}`;
-	}
 	const tests = part.match(/^(\d+ passed)\s*\/\s*(\d+ failed)$/i);
 	if (tests) {
-		return `${theme.fg("success", tests[1]!)}${theme.fg("dim", " / ")}${theme.fg("error", tests[2]!)}`;
+		return `${paint(theme, "completed", tests[1]!)}${paint(theme, "tertiary", " / ")}${paint(theme, "failure", tests[2]!)}`;
 	}
-	if (/\b(?:passed|passing|success)\b/i.test(part)) return theme.fg("success", part);
-	if (/\b(?:truncated|warning|no matches|summarizing)\b/i.test(part)) {
-		return theme.fg("warning", part);
+	if (/\b(?:passed|passing|success)\b/i.test(part)) {
+		return paint(theme, "completed", part);
+	}
+	if (/\b(?:truncated|warning)\b/i.test(part)) {
+		return paint(theme, "caution", part);
 	}
 	if (/^\d+(?:\.\d+)?s$/.test(part) || /^batch call \d+\/\d+$/.test(part)) {
-		return theme.fg("dim", part);
+		return paint(theme, "tertiary", part);
 	}
-	if (part === semanticSummary) return theme.fg("text", part);
-	return theme.fg("muted", part);
+	return paint(theme, "secondary", part);
 }
 
 function indentation(width: number): { branch: string; continuation: string } {
-	if (width >= 12) return { branch: "  └ ", continuation: "    " };
-	if (width >= 6) return { branch: "└ ", continuation: "  " };
+	if (width >= 12) return { branch: "  ⎿ \u00a0", continuation: "     " };
+	if (width >= 6) return { branch: "⎿ \u00a0", continuation: "   " };
 	return { branch: "", continuation: "" };
 }
 
@@ -139,15 +168,17 @@ export class ToolHeaderComponent implements Component {
 		);
 		const fittedArguments = fitArguments(signature.arguments, availableArguments);
 		const argumentText = fittedArguments
-			.map((argument) => styleArgument(argument, theme))
-			.join(theme.fg("dim", ", "));
+			.map((argument, index) =>
+				styleArgument(argument, signature.arguments[index]!, theme, this.options.cwd),
+			)
+			.join(", ");
 		const anchor =
 			theme.fg(this.options.markerColor, this.options.marker) +
 			" " +
 			theme.bold(theme.fg("toolTitle", signature.name)) +
-			theme.fg("dim", "(") +
+			"(" +
 			argumentText +
-			theme.fg("dim", ")") +
+			")" +
 			runningSuffix;
 		const lines = [truncateToWidth(anchor, width, "…")];
 
@@ -172,7 +203,7 @@ export class ToolHeaderComponent implements Component {
 		const wrapped = wrapTextWithAnsi(branchText, contentWidth);
 		for (const [index, line] of wrapped.entries()) {
 			const prefix = index === 0 ? indents.branch : indents.continuation;
-			lines.push(truncateToWidth(prefix + line, width, ""));
+			lines.push(truncateToWidth(theme.fg("muted", prefix) + line, width, ""));
 		}
 		return lines;
 	}

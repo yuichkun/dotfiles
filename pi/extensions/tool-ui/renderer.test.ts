@@ -20,6 +20,13 @@ const plainTheme = {
 	getFgAnsi: (color: string) => color,
 } as unknown as Theme;
 
+const tokenTheme = {
+	fg: (color: string, value: string) => `<${color}>${value}</${color}>`,
+	bold: (value: string) => value,
+	underline: (value: string) => value,
+	getFgAnsi: (color: string) => color,
+} as unknown as Theme;
+
 const semantic = {
 	running: "型定義を修正しています",
 	success: "型定義を修正しました",
@@ -83,7 +90,7 @@ test("renders pending calls with the same signature hierarchy", () => {
 	);
 	const lines = cleanLines(component.render(80));
 	assert.match(lines[0]!, /^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] Update\(src\/index\.ts\) · \d+\.\d+s$/);
-	assert.ok(lines[1]!.startsWith("  └ "));
+	assert.ok(lines[1]!.startsWith("  ⎿ \u00a0"));
 	store.clear();
 });
 
@@ -104,12 +111,60 @@ test("renders a collapsed edit preview below the branch", () => {
 		createContext(args),
 	);
 	const lines = cleanLines(component.render(100));
-	assert.equal(lines[0], "● Update(src/index.ts)");
-	assert.match(lines[1]!, /^  └ Added 1 line, removed 1 line · 型定義を修正しました$/);
+	assert.equal(lines[0], "⏺ Update(src/index.ts)");
+	assert.equal(lines[1], "  ⎿ \u00a0Added 1 line, removed 1 line · 型定義を修正しました");
 	assert.ok(lines.slice(2).every((line) => line.startsWith("    ")));
 	assert.ok(lines.some((line) => line.includes("old")));
 	assert.ok(lines.some((line) => line.includes("new")));
 	for (const line of component.render(100)) assert.ok(visibleWidth(line) <= 100);
+});
+
+test("renders the source-derived Claude completed marker", () => {
+	const args = { path: "src/index.ts" };
+	const store = new ToolSummaryStore();
+	store.ensure("call-1", "read", args);
+	store.setSemantic("call-1", semantic);
+	const definition = withCompactRenderer(createDefinition("read"), store);
+	const component = definition.renderResult!(
+		{ content: [{ type: "text", text: "ok" }], details: {} },
+		{ expanded: false, isPartial: false },
+		tokenTheme,
+		createContext(args),
+	);
+	const rendered = component.render(100).join("\n");
+	assert.match(rendered, /<success>⏺<\/success>/);
+	assert.ok(!rendered.includes("<text>⏺</text>"));
+});
+
+test("keeps completed Bash signature, facts, and semantic summary", () => {
+	const args = { command: "npm test" };
+	const store = new ToolSummaryStore();
+	store.ensure("call-1", "bash", args);
+	store.setSemantic("call-1", semantic);
+	const definition = withCompactRenderer(createDefinition("bash"), store);
+	const result = { content: [{ type: "text" as const, text: "Exit code 1" }], details: {} };
+
+	const success = definition.renderResult!(
+		result,
+		{ expanded: false, isPartial: false },
+		plainTheme,
+		createContext(args),
+	);
+	assert.deepEqual(cleanLines(success.render(100)), [
+		"⏺ Bash(tests)",
+		"  ⎿ \u00a0Ran 1 shell command · 型定義を修正しました",
+	]);
+
+	const failure = definition.renderResult!(
+		result,
+		{ expanded: false, isPartial: false },
+		plainTheme,
+		createContext(args, { isError: true }),
+	);
+	assert.deepEqual(cleanLines(failure.render(100)), [
+		"⏺ Bash(tests)",
+		"  ⎿ \u00a0Error: Exit code 1 · 型定義の修正に失敗しました",
+	]);
 });
 
 test("limits a collapsed write preview and shows the expansion hint", () => {
@@ -133,8 +188,8 @@ test("limits a collapsed write preview and shows the expansion hint", () => {
 		createContext(args),
 	);
 	const lines = cleanLines(component.render(80));
-	assert.equal(lines[0], "● Write(src/generated.ts)");
-	assert.match(lines[1]!, /^  └ Wrote 10 lines · 生成ファイルを書き込みました$/);
+	assert.equal(lines[0], "⏺ Write(src/generated.ts)");
+	assert.equal(lines[1], "  ⎿ \u00a0Wrote 10 lines · 生成ファイルを書き込みました");
 	assert.ok(lines.some((line) => line.includes("const value1 = 1;")));
 	assert.ok(lines.some((line) => line.includes("… 4 more lines")));
 	assert.ok(lines.slice(2).every((line) => line.startsWith("    ")));
@@ -158,7 +213,7 @@ test("keeps exact call and result nested when expanded", () => {
 		createContext(args, { expanded: true }),
 	);
 	const lines = cleanLines(component.render(80));
-	assert.equal(lines[0], "● Read(src/index.ts)");
+	assert.equal(lines[0], "⏺ Read(src/index.ts)");
 	assert.ok(lines.includes("    exact call"));
 	assert.ok(lines.includes("    command details"));
 	assert.ok(lines.includes("    exact result"));
@@ -262,8 +317,8 @@ test("renders error details on the branch without a mutation preview", () => {
 		createContext(args, { isError: true }),
 	);
 	const lines = cleanLines(component.render(80));
-	assert.equal(lines[0], "✗ Update(src/index.ts)");
-	assert.match(lines[1]!, /^  └ Error: Permission denied · 型定義の修正に失敗しました$/);
+	assert.equal(lines[0], "⏺ Update(src/index.ts)");
+	assert.equal(lines[1], "  ⎿ \u00a0Error: Permission denied · 型定義の修正に失敗しました");
 	assert.equal(lines.length, 2);
 });
 
@@ -285,7 +340,7 @@ test("renders persisted metadata without an in-memory summary", () => {
 		createContext(args),
 	);
 	assert.deepEqual(cleanLines(component.render(100)), [
-		"● Update(src/resumed.ts)",
-		"  └ Added 2 lines, removed 0 lines · 0.4s · 型定義を修正しました",
+		"⏺ Update(src/resumed.ts)",
+		"  ⎿ \u00a0Added 2 lines, removed 0 lines · 型定義を修正しました · 0.4s",
 	]);
 });

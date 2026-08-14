@@ -198,9 +198,14 @@ export function getBranchParts(options: {
 		parts.push("Shell command failed");
 	}
 
+	let duration: string | undefined;
 	for (const fact of options.facts) {
 		if (fact === options.toolName || fact === "completed") continue;
 		if (/^running\s+\d/.test(fact)) continue;
+		if (/^\d+(?:\.\d+)?s$/.test(fact)) {
+			duration = fact;
+			continue;
+		}
 		if (isSignatureFact(fact, signature)) continue;
 		if (options.toolName === "bash" && fact === signature.arguments[0]?.text) continue;
 		const humanized = humanizeFact(options.toolName, fact);
@@ -209,5 +214,6 @@ export function getBranchParts(options: {
 
 	const summary = singleLine(options.semanticSummary);
 	if (summary && !summaryIsRedundant(summary, parts, signature)) parts.push(summary);
+	if (duration) parts.push(duration);
 	return parts;
 }

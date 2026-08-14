@@ -14,6 +14,7 @@ interface Renderable {
 }
 
 interface ExecutablePlanTool {
+	renderShell: "self";
 	execute(
 		toolCallId: string,
 		params: unknown,
@@ -137,8 +138,9 @@ test("requires and consumes a branch-local Fable consultation for initial set", 
 	assert.equal(getResult.details.kind, "inspection");
 });
 
-test("rendering keeps completion neutral", () => {
+test("rendering keeps completion neutral and uses a self shell", () => {
 	const { tool } = setup();
+	assert.equal(tool.renderShell, "self");
 	const theme = {
 		fg: (color: string, text: string) => `<${color}>${text}</${color}>`,
 		bold: (text: string) => text,
@@ -173,7 +175,7 @@ test("rendering keeps completion neutral", () => {
 		{ expanded: false, isPartial: false },
 		theme,
 	).render(120).join("\n").trimEnd();
-	assert.equal(completed, "<text>Plan r4 · set</text>");
+	assert.equal(completed, "<text>● Plan r4 · set</text>");
 });
 
 test("rejects initial plan creation without consultation", async () => {
