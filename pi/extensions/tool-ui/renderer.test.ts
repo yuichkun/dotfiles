@@ -94,7 +94,7 @@ test("renders pending calls with the same signature hierarchy", () => {
 	store.clear();
 });
 
-test("renders a collapsed edit preview below the branch", () => {
+test("renders a syntax-aware collapsed edit with context on both sides", () => {
 	const args = { path: "src/index.ts", edits: [{ oldText: "old", newText: "new" }] };
 	const store = new ToolSummaryStore();
 	store.ensure("call-1", "edit", args);
@@ -102,7 +102,22 @@ test("renders a collapsed edit preview below the branch", () => {
 	const definition = withCompactRenderer(createDefinition(), store);
 	const result = {
 		content: [{ type: "text" as const, text: "Successfully replaced 1 block" }],
-		details: { diff: " 1 const value = 1;\n-2 old\n+2 new" },
+		details: {
+			diff: [
+				"   ...",
+				"  6 const before1 = true;",
+				"  7 const before2 = true;",
+				"  8 const before3 = true;",
+				"  9 const before4 = true;",
+				"-10 const value = 'old';",
+				"+10 const value = 'new';",
+				" 11 const after1 = true;",
+				" 12 const after2 = true;",
+				" 13 const after3 = true;",
+				" 14 const after4 = true;",
+				"   ...",
+			].join("\n"),
+		},
 	};
 	const component = definition.renderResult!(
 		result,
@@ -110,13 +125,18 @@ test("renders a collapsed edit preview below the branch", () => {
 		plainTheme,
 		createContext(args),
 	);
-	const lines = cleanLines(component.render(100));
+	const rawLines = component.render(100);
+	const lines = cleanLines(rawLines);
 	assert.equal(lines[0], "⏺ Update(src/index.ts)");
 	assert.equal(lines[1], "  ⎿ \u00a0Added 1 line, removed 1 line · 型定義を修正しました");
 	assert.ok(lines.slice(2).every((line) => line.startsWith("    ")));
-	assert.ok(lines.some((line) => line.includes("old")));
-	assert.ok(lines.some((line) => line.includes("new")));
-	for (const line of component.render(100)) assert.ok(visibleWidth(line) <= 100);
+	assert.ok(lines.some((line) => line.includes("-10 const value = 'old';")));
+	assert.ok(lines.some((line) => line.includes("+10 const value = 'new';")));
+	for (const name of ["after1", "after2", "after3", "after4"]) {
+		assert.ok(lines.some((line) => line.includes(name)), `${name} must remain visible`);
+	}
+	assert.ok(rawLines.slice(2).some((line) => line.includes("\u001b[")));
+	for (const line of rawLines) assert.ok(visibleWidth(line) <= 100);
 });
 
 test("renders the source-derived Claude completed marker", () => {

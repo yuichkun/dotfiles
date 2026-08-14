@@ -2,7 +2,6 @@ import {
 	getLanguageFromPath,
 	highlightCode,
 	keyHint,
-	renderDiff,
 	type Theme,
 	type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
@@ -20,13 +19,14 @@ import {
 	IndentedComponent,
 } from "./indented-component.ts";
 import { colorizeExpandedToolOutput } from "./output-color.ts";
+import { SyntaxDiffPreviewComponent } from "./diff-preview.ts";
 import type { ToolSummaryStore } from "./store.ts";
 import { ToolHeaderComponent, type ToolHeaderOptions } from "./tool-header.ts";
 import type { ToolBatchInfo } from "./types.ts";
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const SPINNER_INTERVAL_MS = 120;
-const MUTATION_PREVIEW_LINES = 6;
+const WRITE_PREVIEW_LINES = 6;
 const COMPLETED_MARKER = "⏺";
 
 type AnyRenderCall = NonNullable<ToolDefinition<any, any, any>["renderCall"]>;
@@ -149,32 +149,31 @@ function mutationPreview(options: {
 	result: AnyToolResult;
 	theme: Theme;
 }): Component | undefined {
-	let content: string | undefined;
 	if (options.toolName === "edit") {
 		const diff = asRecord(options.result.details)?.diff;
 		if (typeof diff !== "string" || !diff.trim()) return undefined;
-		content = renderDiff(diff, {
-			filePath: typeof options.args.path === "string" ? options.args.path : undefined,
-		});
-	} else if (options.toolName === "write") {
-		const source = typeof options.args.content === "string" ? options.args.content : "";
-		if (!source.trim()) return undefined;
-		const normalized = source.replace(/\r\n?/g, "\n").replace(/\t/g, "   ");
 		const path = typeof options.args.path === "string" ? options.args.path : undefined;
-		const language = path ? getLanguageFromPath(path) : undefined;
-		content = language
-			? highlightCode(normalized, language).join("\n")
-			: normalized
-					.split("\n")
-					.map((line) => paint(options.theme, "primary", line))
-					.join("\n");
-	} else {
-		return undefined;
+		return new IndentedComponent(
+			new SyntaxDiffPreviewComponent(diff, path, options.theme),
+			{ indent: 4 },
+		);
 	}
+	if (options.toolName !== "write") return undefined;
 
+	const source = typeof options.args.content === "string" ? options.args.content : "";
+	if (!source.trim()) return undefined;
+	const normalized = source.replace(/\r\n?/g, "\n").replace(/\t/g, "   ");
+	const path = typeof options.args.path === "string" ? options.args.path : undefined;
+	const language = path ? getLanguageFromPath(path) : undefined;
+	const content = language
+		? highlightCode(normalized, language).join("\n")
+		: normalized
+				.split("\n")
+				.map((line) => paint(options.theme, "primary", line))
+				.join("\n");
 	return new IndentedComponent(new Text(content, 0, 0), {
 		indent: 4,
-		maxLines: MUTATION_PREVIEW_LINES,
+		maxLines: WRITE_PREVIEW_LINES,
 		overflowText: (remaining) =>
 			options.theme.fg("dim", `… ${remaining} more lines (${keyHint("app.tools.expand", "to expand")})`),
 	});
