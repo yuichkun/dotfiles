@@ -1,6 +1,6 @@
 import { promises as fs } from "node:fs";
-import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { getAgentDir } from "@earendil-works/pi-coding-agent";
 
 interface WorkspaceHistoryFile {
 	recent: string[];
@@ -8,19 +8,8 @@ interface WorkspaceHistoryFile {
 
 const MAX_RECENT_WORKSPACES = 20;
 
-function getAgentDirectory(): string {
-	return (
-		process.env.PI_CODING_AGENT_DIR ??
-		join(homedir(), ".pi", "agent")
-	);
-}
-
 export function getWorkspaceHistoryPath(): string {
-	return join(
-		getAgentDirectory(),
-		"state",
-		"workspace-picker.json",
-	);
+	return join(getAgentDir(), "state", "workspace-picker.json");
 }
 
 export async function loadWorkspaceHistory(): Promise<string[]> {

@@ -6,6 +6,7 @@ import {
 	join,
 	resolve,
 } from "node:path";
+import { getAgentDir } from "@earendil-works/pi-coding-agent";
 
 export interface WorkspaceEntryConfig {
 	name?: string;
@@ -40,15 +41,8 @@ const SKIPPED_DIRECTORIES = new Set([
 	".cache",
 ]);
 
-function getAgentDirectory(): string {
-	return (
-		process.env.PI_CODING_AGENT_DIR ??
-		join(homedir(), ".pi", "agent")
-	);
-}
-
 export function getWorkspaceConfigPath(): string {
-	return join(getAgentDirectory(), "workspaces.json");
+	return join(getAgentDir(), "workspaces.json");
 }
 
 export function expandWorkspacePath(value: string): string {
