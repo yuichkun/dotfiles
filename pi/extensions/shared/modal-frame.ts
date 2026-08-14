@@ -3,6 +3,7 @@ import {
 	truncateToWidth,
 	visibleWidth,
 } from "@earendil-works/pi-tui";
+import { SEMANTIC_COLOR } from "./color-policy.ts";
 
 type ForegroundColor = Parameters<Theme["fg"]>[0];
 type BackgroundColor = Parameters<Theme["bg"]>[0];
@@ -19,8 +20,8 @@ export interface ModalRowOptions {
 }
 
 const DEFAULT_STYLE: Required<ModalFrameStyle> = {
-	borderColor: "borderAccent",
-	titleColor: "accent",
+	borderColor: "borderMuted",
+	titleColor: SEMANTIC_COLOR.primary,
 	backgroundColor: "customMessageBg",
 	selectedBackgroundColor: "selectedBg",
 };

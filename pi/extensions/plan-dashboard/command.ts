@@ -16,7 +16,7 @@ export function registerPlanCommand(
 			if (runtime.getPlan()) {
 				ctx.ui.notify(
 					"This session branch already has a living plan. Use /plan-dashboard to inspect it.",
-					"warning",
+					"info",
 				);
 				return;
 			}

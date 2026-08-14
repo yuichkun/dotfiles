@@ -37,6 +37,73 @@ test("shows factual staleness only after the threshold", () => {
 	assert.match(header(5, 1).render(120).join("\n"), /STALE 5 work \/ 1 turns/);
 });
 
+test("uses focus for NOW and NEXT while keeping completion neutral", () => {
+	const tokenTheme = {
+		fg: (color: string, text: string) => `<${color}>${text}</${color}>`,
+		bg: (_color: string, text: string) => text,
+		bold: (text: string) => text,
+	} as unknown as Theme;
+	const current = new PlanProgressHeader(
+		{ plan: TEST_PLAN, workSinceUpdate: 0, turnsSinceUpdate: 0 },
+		tokenTheme,
+	).render(180).join("\n");
+	assert.match(current, /<accent>▶ NOW<\/accent>/);
+	assert.doesNotMatch(current, /<success>/);
+
+	const nextPlan = {
+		...TEST_PLAN,
+		steps: TEST_PLAN.steps.map((step) =>
+			step.id === "S04" ? { ...step, status: "done" as const } : step,
+		),
+	};
+	const next = new PlanProgressHeader(
+		{ plan: nextPlan, workSinceUpdate: 0, turnsSinceUpdate: 0 },
+		tokenTheme,
+	).render(180).join("\n");
+	assert.match(next, /<accent>● NEXT<\/accent>/);
+	assert.doesNotMatch(next, /<success>● NEXT<\/success>/);
+});
+
+test("separates neutral completed progress from tertiary superseded progress", () => {
+	const tokenTheme = {
+		fg: (color: string, text: string) => `<${color}>${text}</${color}>`,
+		bg: (_color: string, text: string) => text,
+		bold: (text: string) => text,
+	} as unknown as Theme;
+	const plan = {
+		...TEST_PLAN,
+		steps: TEST_PLAN.steps.map((step) =>
+			step.id === "S01" ? { ...step, status: "superseded" as const } : step,
+		),
+	};
+	const output = new PlanProgressHeader(
+		{ plan, workSinceUpdate: 0, turnsSinceUpdate: 0 },
+		tokenTheme,
+	).render(240).join("\n");
+	assert.match(output, /<text>━+<\/text>/);
+	assert.match(output, /<dim>━+<\/dim>/);
+	assert.doesNotMatch(output, /<success>/);
+});
+
+test("uses warning only for severe staleness", () => {
+	const tokenTheme = {
+		fg: (color: string, text: string) => `<${color}>${text}</${color}>`,
+		bg: (_color: string, text: string) => text,
+		bold: (text: string) => text,
+	} as unknown as Theme;
+	const mild = new PlanProgressHeader(
+		{ plan: TEST_PLAN, workSinceUpdate: 5, turnsSinceUpdate: 1 },
+		tokenTheme,
+	).render(240).join("\n");
+	const severe = new PlanProgressHeader(
+		{ plan: TEST_PLAN, workSinceUpdate: 12, turnsSinceUpdate: 1 },
+		tokenTheme,
+	).render(240).join("\n");
+	assert.match(mild, /<muted> · ⚠ STALE/);
+	assert.doesNotMatch(mild, /<warning>/);
+	assert.match(severe, /<warning> · ⚠ STALE/);
+});
+
 test("keeps every header line within the terminal width", () => {
 	for (const width of [40, 80, 120, 180]) {
 		const lines = header(12, 8).render(width);

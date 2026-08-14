@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
+import { paint } from "../shared/color-policy.ts";
 import { consultFable } from "./advisor.ts";
 import {
 	applyPlanProgress,
@@ -292,19 +293,20 @@ export function registerPlanTool(
 						.join(" · ")
 					: args.op;
 			return new Text(
-				`${theme.fg("toolTitle", theme.bold("plan"))} ${theme.fg("accent", suffix)}`,
+				`${paint(theme, "primary", theme.bold("plan"))} ${paint(theme, "secondary", suffix)}`,
 				0,
 				0,
 			);
 		},
 		renderResult(result, { expanded, isPartial }, theme) {
-			if (isPartial) return new Text(theme.fg("warning", "Updating plan…"), 0, 0);
+			if (isPartial) return new Text(paint(theme, "focus", "Updating plan…"), 0, 0);
 			const content = result.content.find((item) => item.type === "text");
 			const details = result.details;
 			if (!details) {
 				return new Text(
-					theme.fg(
-						"error",
+					paint(
+						theme,
+						"failure",
 						content?.type === "text" ? content.text : "Plan tool failed",
 					),
 					0,
@@ -320,21 +322,22 @@ export function registerPlanTool(
 			}
 			if (details.kind === "consultation") {
 				return new Text(
-					theme.fg("success", "Fable consultation complete"),
+					paint(theme, "completed", "Fable consultation complete"),
 					0,
 					0,
 				);
 			}
 			if (details.kind === "inspection") {
 				return new Text(
-					theme.fg("muted", `Plan r${details.plan.revision} inspected`),
+					paint(theme, "primary", `Plan r${details.plan.revision} inspected`),
 					0,
 					0,
 				);
 			}
 			return new Text(
-				theme.fg(
-					"success",
+				paint(
+					theme,
+					"completed",
 					`Plan r${details.plan.revision} · ${details.operation}`,
 				),
 				0,

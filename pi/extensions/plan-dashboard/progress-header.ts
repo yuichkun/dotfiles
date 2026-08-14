@@ -1,5 +1,6 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";
+import { paint } from "../shared/color-policy.ts";
 import { ModalFrame } from "../shared/modal-frame.ts";
 import { getStalenessLevel } from "./context.ts";
 import {
@@ -46,8 +47,9 @@ export class PlanProgressHeader {
 		const staleLabel =
 			staleness === 0
 				? ""
-				: this.theme.fg(
-						staleness === 2 ? "warning" : "muted",
+				: paint(
+						this.theme,
+						staleness === 2 ? "caution" : "secondary",
 						` · ⚠ STALE ${this.state.workSinceUpdate} work / ${this.state.turnsSinceUpdate} turns`,
 					);
 		return [
@@ -74,32 +76,36 @@ export class PlanProgressHeader {
 		const resolvedCount = summary.done + summary.superseded;
 		const doneWidth = Math.min(
 			barWidth,
-			Math.round(
-				(resolvedCount / Math.max(1, summary.total)) * barWidth,
-			),
+			Math.round((summary.done / Math.max(1, summary.total)) * barWidth),
 		);
+		const resolvedWidth = Math.min(
+			barWidth,
+			Math.round((resolvedCount / Math.max(1, summary.total)) * barWidth),
+		);
+		const supersededWidth = Math.max(0, resolvedWidth - doneWidth);
 		const activeWidth =
-			summary.inProgress > 0 && doneWidth < barWidth ? 1 : 0;
+			summary.inProgress > 0 && resolvedWidth < barWidth ? 1 : 0;
 		const remainingWidth = Math.max(
 			0,
-			barWidth - doneWidth - activeWidth,
+			barWidth - resolvedWidth - activeWidth,
 		);
 		const bar =
-			this.theme.fg("success", "━".repeat(doneWidth)) +
-			this.theme.fg("accent", "◆".repeat(activeWidth)) +
+			paint(this.theme, "completed", "━".repeat(doneWidth)) +
+			paint(this.theme, "tertiary", "━".repeat(supersededWidth)) +
+			paint(this.theme, "focus", "◆".repeat(activeWidth)) +
 			this.theme.fg("borderMuted", "─".repeat(remainingWidth));
-		return `${this.theme.fg("muted", label)}[${bar}]`;
+		return `${paint(this.theme, "secondary", label)}[${bar}]`;
 	}
 
 	private renderCurrent(views: readonly PlanStepView[]): string {
 		const current = views.find((view) => view.status === "in_progress");
 		if (current) {
-			return ` ${this.theme.fg("accent", this.theme.bold("▶ NOW"))}  ${this.theme.fg("muted", current.step.id)}  ${this.theme.fg("text", this.theme.bold(current.step.title))}`;
+			return ` ${paint(this.theme, "focus", this.theme.bold("▶ NOW"))}  ${paint(this.theme, "secondary", current.step.id)}  ${paint(this.theme, "primary", this.theme.bold(current.step.title))}`;
 		}
 		const next = views.find((view) => view.status === "ready");
 		if (next) {
-			return ` ${this.theme.fg("success", this.theme.bold("● NEXT"))}  ${this.theme.fg("muted", next.step.id)}  ${this.theme.fg("text", this.theme.bold(next.step.title))}`;
+			return ` ${paint(this.theme, "focus", this.theme.bold("● NEXT"))}  ${paint(this.theme, "secondary", next.step.id)}  ${paint(this.theme, "primary", this.theme.bold(next.step.title))}`;
 		}
-		return ` ${this.theme.fg("success", this.theme.bold("✔ PLAN COMPLETE"))}`;
+		return ` ${paint(this.theme, "completed", this.theme.bold("✔ PLAN COMPLETE"))}`;
 	}
 }

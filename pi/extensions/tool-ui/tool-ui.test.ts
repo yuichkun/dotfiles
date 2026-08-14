@@ -57,8 +57,62 @@ test("applies semantic colors when command output has no ANSI", () => {
 	});
 	assert.equal(
 		output,
-		"<success>✔ parser passed</success>\n<error>AssertionError: mismatch</error>",
+		"<text>✔ parser passed</text>\n<error>AssertionError: mismatch</error>",
 	);
+});
+
+test("highlights grep matches as focus without warning-colored values", () => {
+	const theme = {
+		fg: (color: string, value: string) => `<${color}>${value}</${color}>`,
+	} as unknown as Theme;
+	const output = colorizeExpandedToolOutput({
+		toolName: "grep",
+		args: { pattern: "TODO" },
+		content: [{ type: "text", text: "src/index.ts:12:before TODO after" }],
+		theme,
+	});
+	assert.equal(
+		output,
+		"<muted>src/index.ts</muted><dim>:12:</dim><text>before </text><accent>TODO</accent><text> after</text>",
+	);
+	assert.ok(!output?.includes("<warning>"));
+});
+
+test("classifies explicit diff and info lines without success color", () => {
+	const theme = {
+		fg: (color: string, value: string) => `<${color}>${value}</${color}>`,
+	} as unknown as Theme;
+	assert.equal(
+		colorizeExpandedToolOutput({
+			toolName: "bash",
+			args: { command: "node --test" },
+			content: [{ type: "text", text: "+ 3 passing\nℹ 5 passed" }],
+			theme,
+		}),
+		"<toolDiffAdded>+ 3 passing</toolDiffAdded>\n<muted>ℹ 5 passed</muted>",
+	);
+});
+
+test("keeps find and list path names primary regardless of their words", () => {
+	const theme = {
+		fg: (color: string, value: string) => `<${color}>${value}</${color}>`,
+	} as unknown as Theme;
+	for (const toolName of ["find", "ls"] as const) {
+		assert.equal(
+			colorizeExpandedToolOutput({
+				toolName,
+				args: {},
+				content: [
+					{
+						type: "text",
+						text: "src/error-handling.ts\ndocs/warning-notes.md",
+					},
+				],
+				theme,
+			}),
+			"<text>src/error-handling.ts</text>\n<text>docs/warning-notes.md</text>",
+		);
+	}
 });
 
 test("extracts edit diff facts", () => {

@@ -2,6 +2,7 @@
 
 このディレクトリはExtensionではなく、複数のExtensionから利用する内部ライブラリ。
 `index.ts`を置かないことで、Piのglobal extension探索対象にならないようにしている。
+色の意味は[`../COLOR_POLICY.md`](../COLOR_POLICY.md)へ集約し、`color-policy.ts`のsemantic roleを使う。
 
 ## Modal
 
@@ -11,6 +12,7 @@
   - `BaseModal<T>`：focus、cancel、render requestを共通化する任意の基底class
 - `modal-frame.ts`
   - `ModalFrame`：幅を超えないtitle、row、separator、bottomを描画
+  - defaultはquietな`borderMuted`、primary title、通常panel背景、selected背景
   - border・title・通常背景・選択背景のtheme colorを機能ごとに上書き可能
 
 Modal基盤はAction、Command Palette、Tool Outputなどのdomainを一切知らない。

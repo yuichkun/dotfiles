@@ -3,9 +3,15 @@ import test from "node:test";
 import type {
 	ExtensionAPI,
 	ExtensionContext,
+	Theme,
 } from "@earendil-works/pi-coding-agent";
 import { PlanRuntime, type PlanToolDetails } from "./state.ts";
+import { TEST_PLAN } from "./test-fixture.ts";
 import { registerPlanTool } from "./tool.ts";
+
+interface Renderable {
+	render(width: number): string[];
+}
 
 interface ExecutablePlanTool {
 	execute(
@@ -15,6 +21,15 @@ interface ExecutablePlanTool {
 		onUpdate: undefined,
 		ctx: ExtensionContext,
 	): Promise<{ details: PlanToolDetails }>;
+	renderCall(args: { op: string }, theme: Theme): Renderable;
+	renderResult(
+		result: {
+			content: Array<{ type: "text"; text: string }>;
+			details?: PlanToolDetails;
+		},
+		options: { expanded: boolean; isPartial: boolean },
+		theme: Theme,
+	): Renderable;
 }
 
 function setup(): {
@@ -120,6 +135,45 @@ test("requires and consumes a branch-local Fable consultation for initial set", 
 		context,
 	);
 	assert.equal(getResult.details.kind, "inspection");
+});
+
+test("rendering keeps completion neutral", () => {
+	const { tool } = setup();
+	const theme = {
+		fg: (color: string, text: string) => `<${color}>${text}</${color}>`,
+		bold: (text: string) => text,
+	} as unknown as Theme;
+	const call = tool
+		.renderCall({ op: "get" }, theme)
+		.render(120)
+		.join("\n")
+		.trimEnd();
+	assert.equal(call, "<text>plan</text> <muted>get</muted>");
+
+	const partial = tool.renderResult(
+		{ content: [], details: { kind: "inspection", plan: TEST_PLAN } },
+		{ expanded: false, isPartial: true },
+		theme,
+	).render(120).join("\n").trimEnd();
+	assert.equal(partial, "<accent>Updating plan…</accent>");
+	assert.ok(!partial.includes("<warning>"));
+
+	const inspection = tool.renderResult(
+		{ content: [], details: { kind: "inspection", plan: TEST_PLAN } },
+		{ expanded: false, isPartial: false },
+		theme,
+	).render(120).join("\n").trimEnd();
+	assert.equal(inspection, "<text>Plan r4 inspected</text>");
+
+	const completed = tool.renderResult(
+		{
+			content: [],
+			details: { kind: "plan", operation: "set", plan: TEST_PLAN },
+		},
+		{ expanded: false, isPartial: false },
+		theme,
+	).render(120).join("\n").trimEnd();
+	assert.equal(completed, "<text>Plan r4 · set</text>");
 });
 
 test("rejects initial plan creation without consultation", async () => {

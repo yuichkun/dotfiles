@@ -1,4 +1,5 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
+import { paint } from "../shared/color-policy.ts";
 
 interface SanitizedAnsi {
 	text: string;
@@ -73,18 +74,15 @@ function getRawText(content: readonly unknown[]): string {
 
 function colorizeSemanticLine(line: string, theme: Theme): string {
 	if (/^\s*(?:✖|✗)|\b(?:FAIL|ERROR|Error|Exception|AssertionError|fatal)\b|\b[1-9]\d* failed\b/.test(line)) {
-		return theme.fg("error", line);
+		return paint(theme, "failure", line);
 	}
 	if (/\b(?:WARN|WARNING|Warning|deprecated|truncated)\b/i.test(line)) {
-		return theme.fg("warning", line);
-	}
-	if (/^\s*(?:✔|✓)|\b(?:PASS|passed|passing|success)\b/i.test(line)) {
-		return theme.fg("success", line);
+		return paint(theme, "caution", line);
 	}
 	if (line.startsWith("+") && !line.startsWith("+++")) return theme.fg("toolDiffAdded", line);
 	if (line.startsWith("-") && !line.startsWith("---")) return theme.fg("toolDiffRemoved", line);
-	if (/^\s*(?:ℹ|info\b)/i.test(line)) return theme.fg("accent", line);
-	return theme.fg("text", line);
+	if (/^\s*(?:ℹ|info\b)/i.test(line)) return paint(theme, "secondary", line);
+	return paint(theme, "primary", line);
 }
 
 function colorizeSemanticOutput(value: string, theme: Theme): string {
@@ -107,18 +105,18 @@ function patternRegex(args: Record<string, unknown>): RegExp | undefined {
 }
 
 function colorizeMatches(value: string, regex: RegExp | undefined, theme: Theme): string {
-	if (!regex) return theme.fg("text", value);
+	if (!regex) return paint(theme, "primary", value);
 	regex.lastIndex = 0;
 	let result = "";
 	let cursor = 0;
 	for (const match of value.matchAll(regex)) {
 		const index = match.index ?? 0;
-		if (index > cursor) result += theme.fg("text", value.slice(cursor, index));
-		result += theme.fg("warning", match[0]);
+		if (index > cursor) result += paint(theme, "primary", value.slice(cursor, index));
+		result += paint(theme, "focus", match[0]);
 		cursor = index + match[0].length;
 	}
-	if (cursor < value.length) result += theme.fg("text", value.slice(cursor));
-	return result || theme.fg("text", value);
+	if (cursor < value.length) result += paint(theme, "primary", value.slice(cursor));
+	return result || paint(theme, "primary", value);
 }
 
 function colorizeGrepOutput(value: string, args: Record<string, unknown>, theme: Theme): string {
@@ -130,8 +128,8 @@ function colorizeGrepOutput(value: string, args: Record<string, unknown>, theme:
 			if (!match) return colorizeSemanticLine(line, theme);
 			const [, path, firstSeparator, lineNumber, secondSeparator, body] = match;
 			return (
-				theme.fg("accent", path!) +
-				theme.fg("dim", `${firstSeparator}${lineNumber}${secondSeparator}`) +
+				paint(theme, "secondary", path!) +
+				paint(theme, "tertiary", `${firstSeparator}${lineNumber}${secondSeparator}`) +
 				colorizeMatches(body!, regex, theme)
 			);
 		})
@@ -141,14 +139,7 @@ function colorizeGrepOutput(value: string, args: Record<string, unknown>, theme:
 function colorizePathOutput(value: string, theme: Theme): string {
 	return value
 		.split("\n")
-		.map((line) => {
-			if (!line.trim()) return line;
-			if (/\b(?:error|failed|not found)\b/i.test(line)) return theme.fg("error", line);
-			if (/\b(?:warning|truncated|limit reached)\b/i.test(line)) {
-				return theme.fg("warning", line);
-			}
-			return theme.fg("accent", line);
-		})
+		.map((line) => (line.trim() ? paint(theme, "primary", line) : line))
 		.join("\n");
 }
 

@@ -9,6 +9,10 @@ import {
 	visibleWidth,
 	wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
+import {
+	paint,
+	type SemanticColorRole,
+} from "../shared/color-policy.ts";
 import { ModalFrame } from "../shared/modal-frame.ts";
 import {
 	BaseModal,
@@ -43,7 +47,9 @@ type CanvasStyle =
 	| "blocked"
 	| "superseded"
 	| "selected"
-	| "unrelated";
+	| "unrelated"
+	| "primary"
+	| "secondary";
 
 interface CanvasCell {
 	text: string;
@@ -86,8 +92,19 @@ function statusLabel(status: DisplayStepStatus): string {
 	}
 }
 
-function nodeStyle(status: DisplayStepStatus): CanvasStyle {
-	return status;
+function statusRole(status: DisplayStepStatus): SemanticColorRole {
+	switch (status) {
+		case "done":
+			return "completed";
+		case "in_progress":
+			return "focus";
+		case "ready":
+			return "primary";
+		case "blocked":
+			return "secondary";
+		case "superseded":
+			return "tertiary";
+	}
 }
 
 function edgeGlyph(mask: number): string {
@@ -408,23 +425,29 @@ class DiagramCanvas {
 			case "edge":
 				return theme.fg("borderMuted", text);
 			case "edge-highlight":
-				return theme.fg("accent", theme.bold(text));
+				return paint(theme, "focus", theme.bold(text));
 			case "phase":
-				return theme.fg("muted", theme.bold(text));
+				return paint(theme, "secondary", theme.bold(text));
 			case "done":
-				return theme.fg("success", text);
 			case "in_progress":
-				return theme.fg("accent", theme.bold(text));
 			case "ready":
-				return theme.fg("success", theme.bold(text));
 			case "blocked":
-				return theme.fg("dim", text);
 			case "superseded":
-				return theme.fg("muted", text);
+				return paint(
+					theme,
+					statusRole(style),
+					style === "in_progress" || style === "ready"
+						? theme.bold(text)
+						: text,
+				);
 			case "selected":
 				return theme.inverse(theme.bold(text));
 			case "unrelated":
-				return theme.fg("dim", text);
+				return paint(theme, "tertiary", text);
+			case "primary":
+				return paint(theme, "primary", theme.bold(text));
+			case "secondary":
+				return paint(theme, "secondary", text);
 			case "plain":
 				return text;
 		}
@@ -537,7 +560,7 @@ export class PlanDashboardComponent extends BaseModal<void> {
 		lines.push(frame.row(this.renderSelectedGoal(selected)));
 		lines.push(
 			frame.row(
-				` ${this.theme.fg("dim", "←→ stages · ↑↓ lane · Tab frontier · d trace dependencies · 0 current · Enter details · Esc close")}`,
+				` ${paint(this.theme, "tertiary", "←→ stages · ↑↓ lane · Tab frontier · d trace dependencies · 0 current · Enter details · Esc close")}`,
 			),
 		);
 		lines.push(frame.bottom());
@@ -548,28 +571,33 @@ export class PlanDashboardComponent extends BaseModal<void> {
 		const summary = summarizePlan(this.views);
 		const progressWidth = Math.max(12, Math.min(30, Math.floor(width * 0.24)));
 		const resolved = summary.done + summary.superseded;
-		const completed = Math.round(
+		const doneWidth = Math.round(
+			(summary.done / Math.max(1, summary.total)) * progressWidth,
+		);
+		const resolvedWidth = Math.round(
 			(resolved / Math.max(1, summary.total)) * progressWidth,
 		);
-		const active = summary.inProgress > 0 && completed < progressWidth ? 1 : 0;
+		const supersededWidth = Math.max(0, resolvedWidth - doneWidth);
+		const active = summary.inProgress > 0 && resolvedWidth < progressWidth ? 1 : 0;
 		const bar =
-			this.theme.fg("success", "━".repeat(completed)) +
-			this.theme.fg("accent", "━".repeat(active)) +
+			paint(this.theme, "completed", "━".repeat(doneWidth)) +
+			paint(this.theme, "tertiary", "━".repeat(supersededWidth)) +
+			paint(this.theme, "focus", "━".repeat(active)) +
 			this.theme.fg(
 				"borderMuted",
-				"─".repeat(Math.max(0, progressWidth - completed - active)),
+				"─".repeat(Math.max(0, progressWidth - resolvedWidth - active)),
 			);
 		const metrics = [
-			this.theme.fg("success", `✔ done ${summary.done}`),
+			paint(this.theme, "completed", `✔ done ${summary.done}`),
 			...(summary.superseded > 0
-				? [this.theme.fg("muted", `⊘ superseded ${summary.superseded}`)]
+				? [paint(this.theme, "tertiary", `⊘ superseded ${summary.superseded}`)]
 				: []),
-			this.theme.fg("accent", `▶ now ${summary.inProgress}`),
-			this.theme.fg("success", `● ready ${summary.ready}`),
-			this.theme.fg("dim", `○ waiting ${summary.blocked}`),
-		].join(this.theme.fg("dim", "  ·  "));
+			paint(this.theme, "focus", `▶ now ${summary.inProgress}`),
+			paint(this.theme, "primary", `● ready ${summary.ready}`),
+			paint(this.theme, "secondary", `○ waiting ${summary.blocked}`),
+		].join(paint(this.theme, "tertiary", "  ·  "));
 		const trace = this.dependencyHighlight
-			? this.theme.fg("accent", "  ·  TRACE ON")
+			? paint(this.theme, "focus", "  ·  TRACE ON")
 			: "";
 		const staleness = getStalenessLevel(
 			this.workSinceUpdate,
@@ -578,8 +606,9 @@ export class PlanDashboardComponent extends BaseModal<void> {
 		const stale =
 			staleness === 0
 				? ""
-				: this.theme.fg(
-						staleness === 2 ? "warning" : "muted",
+				: paint(
+						this.theme,
+						staleness === 2 ? "caution" : "secondary",
 						`  ·  ⚠ STALE ${this.workSinceUpdate} work / ${this.turnsSinceUpdate} turns`,
 					);
 		return ` ${bar}  ${resolved}/${summary.total}${stale}  ${metrics}${trace}`;
@@ -684,7 +713,17 @@ export class PlanDashboardComponent extends BaseModal<void> {
 			? "selected"
 			: unrelated
 				? "unrelated"
-				: nodeStyle(node.view.status);
+				: node.view.status;
+		const titleStyle: CanvasStyle = selected
+			? "selected"
+			: unrelated
+				? "unrelated"
+				: "primary";
+		const metadataStyle: CanvasStyle = selected
+			? "selected"
+			: unrelated
+				? "unrelated"
+				: "secondary";
 		const border = borderCharacters(node.view.status);
 		canvas.fillRect(node.x, node.y, node.width, node.height, style);
 		canvas.writeText(node.x, node.y, border.topLeft, 1, style);
@@ -748,7 +787,7 @@ export class PlanDashboardComponent extends BaseModal<void> {
 			node.y + 2,
 			node.view.step.shortTitle ?? node.view.step.title,
 			innerWidth,
-			style,
+			titleStyle,
 			"center",
 		);
 		if (node.height >= 5) {
@@ -761,7 +800,7 @@ export class PlanDashboardComponent extends BaseModal<void> {
 				node.y + 3,
 				state,
 				innerWidth,
-				style,
+				metadataStyle,
 				"center",
 			);
 		}
@@ -775,12 +814,12 @@ export class PlanDashboardComponent extends BaseModal<void> {
 		const downstream = view.dependents.length
 			? view.dependents.map((step) => step.id).join(",")
 			: "end";
-		return ` ${this.theme.fg(nodeStyle(view.status) === "blocked" ? "dim" : nodeStyle(view.status) === "in_progress" ? "accent" : "success", `${statusIcon(view.status)} ${view.step.id} ${statusLabel(view.status)}`)}  ${this.theme.fg("text", this.theme.bold(view.step.title))}  ${this.theme.fg("dim", `← ${dependencies}  → ${downstream}`)}`;
+		return ` ${paint(this.theme, statusRole(view.status), `${statusIcon(view.status)} ${view.step.id} ${statusLabel(view.status)}`)}  ${paint(this.theme, "primary", this.theme.bold(view.step.title))}  ${paint(this.theme, "secondary", `← ${dependencies}  → ${downstream}`)}`;
 	}
 
 	private renderSelectedGoal(view: PlanStepView | undefined): string {
 		if (!view) return "";
-		return ` ${this.theme.fg("muted", `Goal: ${view.step.goal}`)}`;
+		return ` ${paint(this.theme, "primary", `Goal: ${view.step.goal}`)}`;
 	}
 
 	private getRelatedStepIds(): Set<string> {
@@ -923,7 +962,7 @@ export class PlanDashboardComponent extends BaseModal<void> {
 		const lines = [
 			frame.top(`Plan Step · ${selected.step.id}`),
 			frame.row(
-				` ${statusIcon(selected.status)} ${statusLabel(selected.status)}  ${this.theme.fg("dim", `${selected.step.phase} · updated ${new Date(selected.step.updatedAt).toLocaleString()} by ${selected.step.updatedBy}`)}`,
+				` ${paint(this.theme, statusRole(selected.status), `${statusIcon(selected.status)} ${statusLabel(selected.status)}`)}  ${paint(this.theme, "tertiary", `${selected.step.phase} · updated ${new Date(selected.step.updatedAt).toLocaleString()} by ${selected.step.updatedBy}`)}`,
 			),
 			frame.separator(),
 		];
@@ -935,7 +974,7 @@ export class PlanDashboardComponent extends BaseModal<void> {
 				: "";
 		lines.push(
 			frame.row(
-				` ${this.theme.fg("dim", `↑↓ scroll · PgUp/PgDn page · Esc back${scroll}`)}`,
+				` ${paint(this.theme, "tertiary", `↑↓ scroll · PgUp/PgDn page · Esc back${scroll}`)}`,
 			),
 		);
 		lines.push(frame.bottom());
@@ -944,27 +983,27 @@ export class PlanDashboardComponent extends BaseModal<void> {
 
 	private buildDetailLines(view: PlanStepView, width: number): string[] {
 		const lines: string[] = [];
-		lines.push(` ${this.theme.fg("text", this.theme.bold(view.step.title))}`);
+		lines.push(` ${paint(this.theme, "primary", this.theme.bold(view.step.title))}`);
 		lines.push("");
 		lines.push(` ${this.sectionTitle("DEPENDENCIES")}`);
 		lines.push(
-			`   ${this.theme.fg("muted", `← ${view.step.dependsOn.join(", ") || "root"}`)}`,
+			`   ${paint(this.theme, "secondary", `← ${view.step.dependsOn.join(", ") || "root"}`)}`,
 		);
 		lines.push(
-			`   ${this.theme.fg("muted", `→ ${view.dependents.map((step) => step.id).join(", ") || "end"}`)}`,
+			`   ${paint(this.theme, "secondary", `→ ${view.dependents.map((step) => step.id).join(", ") || "end"}`)}`,
 		);
 		lines.push("");
 		lines.push(` ${this.sectionTitle("GOAL")}`);
-		this.pushWrappedText(lines, view.step.goal, width, "muted", " ");
+		this.pushWrappedText(lines, view.step.goal, width, "primary", " ");
 		lines.push("");
 		lines.push(` ${this.sectionTitle("WORK")}`);
 		for (const item of view.step.work) {
 			this.pushWrappedBullet(
 				lines,
-				this.theme.fg("accent", "• "),
+				paint(this.theme, "secondary", "• "),
 				item,
 				width,
-				"text",
+				"primary",
 				" ",
 			);
 		}
@@ -973,25 +1012,25 @@ export class PlanDashboardComponent extends BaseModal<void> {
 		for (const criterion of view.step.acceptance) {
 			this.pushWrappedBullet(
 				lines,
-				this.theme.fg("dim", "□ "),
+				paint(this.theme, "secondary", "□ "),
 				criterion,
 				width,
-				"muted",
+				"primary",
 				" ",
 			);
 		}
 		lines.push("");
 		lines.push(` ${this.sectionTitle("RELATED FILES")}`);
 		if (view.step.relatedFiles.length === 0) {
-			lines.push(`   ${this.theme.fg("dim", "No files recorded")}`);
+			lines.push(`   ${paint(this.theme, "tertiary", "No files recorded")}`);
 		} else {
 			for (const path of view.step.relatedFiles) {
 				this.pushWrappedBullet(
 					lines,
-					this.theme.fg("dim", "· "),
+					paint(this.theme, "tertiary", "· "),
 					path,
 					width,
-					"mdCode",
+					"code",
 					" ",
 				);
 			}
@@ -1000,18 +1039,18 @@ export class PlanDashboardComponent extends BaseModal<void> {
 	}
 
 	private sectionTitle(title: string): string {
-		return this.theme.fg("accent", this.theme.bold(title));
+		return paint(this.theme, "primary", this.theme.bold(title));
 	}
 
 	private pushWrappedText(
 		lines: string[],
 		text: string,
 		width: number,
-		color: Parameters<Theme["fg"]>[0],
+		color: SemanticColorRole,
 		indent = "",
 	): void {
 		const available = Math.max(1, width - visibleWidth(indent));
-		for (const line of wrapTextWithAnsi(this.theme.fg(color, text), available)) {
+		for (const line of wrapTextWithAnsi(paint(this.theme, color, text), available)) {
 			lines.push(`${indent}${line}`);
 		}
 	}
@@ -1021,7 +1060,7 @@ export class PlanDashboardComponent extends BaseModal<void> {
 		prefix: string,
 		text: string,
 		width: number,
-		color: Parameters<Theme["fg"]>[0],
+		color: SemanticColorRole,
 		outerIndent = "",
 	): void {
 		const prefixWidth = visibleWidth(prefix);
@@ -1029,7 +1068,10 @@ export class PlanDashboardComponent extends BaseModal<void> {
 			1,
 			width - visibleWidth(outerIndent) - prefixWidth,
 		);
-		const wrapped = wrapTextWithAnsi(this.theme.fg(color, text), available);
+		const wrapped = wrapTextWithAnsi(
+			paint(this.theme, color, text),
+			available,
+		);
 		for (let index = 0; index < wrapped.length; index++) {
 			lines.push(
 				`${outerIndent}${index === 0 ? prefix : " ".repeat(prefixWidth)}${wrapped[index] ?? ""}`,

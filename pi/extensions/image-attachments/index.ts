@@ -16,6 +16,8 @@ import {
 	truncateToWidth,
 	visibleWidth,
 } from "@earendil-works/pi-tui";
+import { paint } from "../shared/color-policy.ts";
+import { styleAttachmentChip } from "./attachment-style.ts";
 
 const WIDGET_ID = "image-attachments";
 const IMAGE_ONLY_PROMPT_MARKER = "[pi:image-only]";
@@ -179,15 +181,13 @@ function updateAttachmentWidget(
 	ctx.ui.setWidget(WIDGET_ID, (_tui, theme) => ({
 		render(width: number): string[] {
 			const rows = renderAttachmentRows(draft, width, (text, selected) =>
-				selected
-					? theme.bg("selectedBg", theme.fg("accent", theme.bold(text)))
-					: theme.fg("muted", text),
+				styleAttachmentChip(theme, text, selected),
 			);
 			const hint =
 				draft.selection === null
 					? "↑ focus attachments"
 					: "←→ select  Backspace remove  ↓/Esc return";
-			rows.push(truncateToWidth(` ${theme.fg("dim", hint)}`, width, ""));
+			rows.push(truncateToWidth(` ${paint(theme, "tertiary", hint)}`, width, ""));
 			return rows;
 		},
 		invalidate(): void {},

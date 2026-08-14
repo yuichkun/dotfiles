@@ -22,8 +22,10 @@ const keyByAction: Record<string, string> = {
 function createComponent(
 	rows = 30,
 	staleness = { workSinceUpdate: 0, turnsSinceUpdate: 0 },
+	themeOverride?: Theme,
+	plan = TEST_PLAN,
 ): PlanDashboardComponent {
-	const theme = {
+	const theme = themeOverride ?? ({
 		fg: (_color: string, text: string) => text,
 		bg: (_color: string, text: string) => text,
 		bold: (text: string) => text,
@@ -31,7 +33,7 @@ function createComponent(
 		underline: (text: string) => text,
 		inverse: (text: string) => text,
 		strikethrough: (text: string) => text,
-	} as unknown as Theme;
+	} as unknown as Theme);
 	const tui = {
 		terminal: { rows, columns: 160 },
 		requestRender: () => {},
@@ -46,7 +48,7 @@ function createComponent(
 		keybindings,
 		close: () => {},
 	};
-	return new PlanDashboardComponent(TEST_PLAN, context, staleness);
+	return new PlanDashboardComponent(plan, context, staleness);
 }
 
 function assertWidthSafe(lines: readonly string[], width: number): void {
@@ -77,6 +79,85 @@ test("wide overview renders the complete 15-step DAG", () => {
 	assert.match(output, /┏/);
 	assert.match(output, /┄/);
 	assert.match(output, /DAGダッシュボ/);
+});
+
+test("keeps body readable and non-current statuses distinct", () => {
+	const calls: Array<[string, string]> = [];
+	const spyTheme = {
+		fg: (color: string, text: string) => {
+			calls.push([color, text]);
+			return text;
+		},
+		bg: (_color: string, text: string) => text,
+		bold: (text: string) => text,
+		italic: (text: string) => text,
+		underline: (text: string) => text,
+		inverse: (text: string) => text,
+		strikethrough: (text: string) => text,
+	} as unknown as Theme;
+	const component = createComponent(
+		40,
+		{ workSinceUpdate: 0, turnsSinceUpdate: 0 },
+		spyTheme,
+	);
+	component.render(140);
+	assert.ok(calls.some(([color, text]) => color === "text" && text.includes("要求を整理する")));
+	assert.ok(calls.some(([color, text]) => color === "text" && text.includes("● S05")));
+	assert.ok(calls.some(([color, text]) => color === "muted" && text.includes("○ S07")));
+	assert.ok(!calls.some(([color]) => color === "success"));
+	assert.ok(!calls.some(([color]) => color === "warning"));
+	assert.ok(!calls.some(([color, text]) => color === "dim" && text.includes("○ S07")));
+	assert.ok(calls.some(([color, text]) => color === "text" && text.includes("Goal:")));
+
+	calls.length = 0;
+	component.handleInput("\r");
+	component.render(120);
+	assert.ok(
+		calls.some(
+			([color, text]) =>
+				color === "text" && text.includes("DAGダッシュボードを実装するが検証されている。"),
+		),
+	);
+});
+
+test("keeps superseded chrome tertiary while its title stays readable", () => {
+	const calls: Array<[string, string]> = [];
+	const spyTheme = {
+		fg: (color: string, text: string) => {
+			calls.push([color, text]);
+			return text;
+		},
+		bg: (_color: string, text: string) => text,
+		bold: (text: string) => text,
+		italic: (text: string) => text,
+		underline: (text: string) => text,
+		inverse: (text: string) => text,
+		strikethrough: (text: string) => text,
+	} as unknown as Theme;
+	const plan = {
+		...TEST_PLAN,
+		steps: TEST_PLAN.steps.map((step) =>
+			step.id === "S15"
+				? { ...step, status: "superseded" as const, shortTitle: "SUPER" }
+				: step,
+		),
+	};
+	createComponent(
+		40,
+		{ workSinceUpdate: 0, turnsSinceUpdate: 0 },
+		spyTheme,
+		plan,
+	).render(140);
+
+	assert.ok(calls.some(([color, text]) => color === "dim" && text.includes("⊘ S15")));
+	assert.ok(
+		calls.some(
+			([color, text]) => color === "text" && text.includes("SUPER"),
+		),
+	);
+	assert.ok(
+		calls.some(([color, text]) => color === "muted" && text.includes("superseded")),
+	);
 });
 
 test("shows factual staleness in the dashboard summary", () => {

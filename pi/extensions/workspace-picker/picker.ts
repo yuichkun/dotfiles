@@ -6,6 +6,7 @@ import {
 	Input,
 	truncateToWidth,
 } from "@earendil-works/pi-tui";
+import { paint } from "../shared/color-policy.ts";
 import { ModalFrame } from "../shared/modal-frame.ts";
 import {
 	BaseModal,
@@ -66,7 +67,7 @@ function sortWorkspaces(
 	});
 }
 
-class WorkspacePickerComponent extends BaseModal<string> {
+export class WorkspacePickerComponent extends BaseModal<string> {
 	private readonly input = new Input();
 	private readonly workspaces: readonly Workspace[];
 	private readonly currentDirectory: string;
@@ -140,7 +141,7 @@ class WorkspacePickerComponent extends BaseModal<string> {
 			const message = this.input.getValue().trim()
 				? "No matching workspaces"
 				: "No workspaces found in the configured roots";
-			lines.push(frame.row(`  ${this.theme.fg("dim", message)}`));
+			lines.push(frame.row(`  ${paint(this.theme, "tertiary", message)}`));
 			renderedRows++;
 		} else {
 			const { start, end } = this.getVisibleRange(visibleRows);
@@ -166,11 +167,11 @@ class WorkspacePickerComponent extends BaseModal<string> {
 		const selectedPath = selected
 			? abbreviateHome(selected.path)
 			: "";
-		lines.push(frame.row(` ${this.theme.fg("muted", selectedPath)}`));
+		lines.push(frame.row(` ${paint(this.theme, "primary", selectedPath)}`));
 		lines.push(frame.separator());
 		lines.push(
 			frame.row(
-				` ${this.theme.fg("dim", `↑↓ navigate · Enter open · Esc close · ${this.filteredWorkspaces.length}/${this.workspaces.length}`)}`,
+				` ${paint(this.theme, "tertiary", `↑↓ navigate · Enter open · Esc close · ${this.filteredWorkspaces.length}/${this.workspaces.length}`)}`,
 			),
 		);
 		lines.push(frame.bottom());
@@ -181,16 +182,17 @@ class WorkspacePickerComponent extends BaseModal<string> {
 		workspace: Workspace,
 		selected: boolean,
 	): string {
-		const prefix = selected ? " › " : "   ";
+		const prefix = selected ? paint(this.theme, "focus", " › ") : "   ";
 		const name = selected
-			? this.theme.fg("accent", this.theme.bold(workspace.name))
-			: this.theme.fg("text", workspace.name);
+			? paint(this.theme, "focus", this.theme.bold(workspace.name))
+			: paint(this.theme, "primary", workspace.name);
 		const current =
 			resolve(workspace.path) === this.currentDirectory
-				? this.theme.fg("success", "  current")
+				? paint(this.theme, "focus", "  current")
 				: "";
-		const path = this.theme.fg(
-			"muted",
+		const path = paint(
+			this.theme,
+			"secondary",
 			`  ${abbreviateHome(workspace.path)}`,
 		);
 		return prefix + name + current + path;
