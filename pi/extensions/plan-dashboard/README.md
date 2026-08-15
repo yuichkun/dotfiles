@@ -23,17 +23,17 @@ Plan Modeや権限制御は導入せず、ユーザーが`/plan`を実行したS
 
 1. タスクを通常のUser MessageとしてSessionへ追加する。
 2. Agentが要求とコードベースを調査する。
-3. `plan` Toolの`consult` operationが、要求の逐語、確認済み事実、制約、未決事項をFableへ渡す。
-4. Fableの独立した回答をAgentが評価する。
-5. Agentが`set` operationで依存関係付きPlanを保存し、通常作業を続行する。
+3. 通常のタスクでは、Agentが`set` operationで依存関係付きPlanを直接保存する。Fable consultationは必要ない。
+4. 難しい、曖昧、高リスクで、独立した視点が実質的に役立つ場合だけ`consult`を使う。ユーザーが不要と指定した場合は呼ばない。
+5. AgentがPlanを保存し、通常作業を続行する。
 
-Fableは次の固定条件で実行する。
+Fableはoptional advisorであり、承認者やgateではない。利用する場合だけ、要求の逐語、確認済み事実、制約、未決事項を次の固定条件で渡す。
 
 ```bash
 claude -p --model fable --effort max --safe-mode --tools "" --no-session-persistence
 ```
 
-相談packetにはAgent側のPlan候補や望ましい結論を含めない。初回`set`は、現在のSession branchに保存された成功済みconsultation IDがなければ拒否する。
+相談packetにはAgent側のPlan候補や望ましい結論を含めない。相談した場合は回答を批判的に評価して`consultationId`を`set`へ渡す。相談しない場合は`consultationId`を省略する。
 
 ## 継続更新
 
@@ -48,7 +48,7 @@ Ready: S05, S06
 `plan` Toolは次のoperationを持つ。
 
 - `get`: 構造的replanに必要な完全snapshotを取得する
-- `consult`: 初回または構造的replanの前にFableへ相談する
+- `consult`: 難しい、曖昧、高リスクなplanningで独立した助言が役立つ場合だけFableへ相談する（optional）
 - `set`: Plan全体を作成・改訂する。省略した既存Stepは`superseded`になる
 - `progress`: 現在Stepの完了とReady Stepの開始をatomicに更新する
 

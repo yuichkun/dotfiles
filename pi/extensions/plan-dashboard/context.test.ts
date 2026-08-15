@@ -11,7 +11,7 @@ test("stays completely silent without an explicit plan request", () => {
 	);
 });
 
-test("injects the one-shot consultation workflow for an explicit request", () => {
+test("injects direct planning with optional consultation for an explicit request", () => {
 	const context = buildPlanContext({
 		request: {
 			schemaVersion: 1,
@@ -23,9 +23,12 @@ test("injects the one-shot consultation workflow for an explicit request", () =>
 		turnsSinceUpdate: 0,
 	});
 	assert.match(context ?? "", /explicitly invoked \/plan/);
-	assert.match(context ?? "", /requestId="request-1"/);
+	assert.match(context ?? "", /Request ID: request-1/);
 	assert.match(context ?? "", /Implement passkeys/);
-	assert.match(context ?? "", /Do not pass a proposed solution/);
+	assert.match(context ?? "", /no consultation is required/);
+	assert.match(context ?? "", /genuinely difficult, ambiguous, or high-risk/);
+	assert.match(context ?? "", /optional advice, not an approval authority/);
+	assert.match(context ?? "", /Do not consult when the user asks you not to/);
 });
 
 test("escalates a stale living-plan digest without creating an extra turn", () => {
@@ -39,4 +42,6 @@ test("escalates a stale living-plan digest without creating an extra turn", () =
 	assert.match(context, /Synchronize the plan with reality/);
 	assert.match(context, /S01 \[done\]/);
 	assert.match(context, /S15 \[blocked\]/);
+	assert.match(context, /Fable consultation is optional/);
+	assert.match(context, /never an approval gate/);
 });

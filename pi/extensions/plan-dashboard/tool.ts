@@ -142,11 +142,12 @@ export function registerPlanTool(
 		name: PLAN_TOOL_NAME,
 		label: "Plan",
 		description:
-			"Consult Fable and maintain the living plan explicitly requested with /plan. Do not create a plan unless a /plan request is pending. When a plan exists, update it proactively at step boundaries and whenever assumptions, steps, ordering, or dependencies change. get returns the complete current snapshot when needed for a structural revision; consult sends only raw request, observed facts, constraints, and open questions to independent Fable; set creates or fully replaces the current plan structure (omitted existing steps become superseded); progress atomically completes the current step and/or starts a ready step.",
+			"Create and maintain the living plan explicitly requested with /plan. Do not create a plan unless a /plan request is pending. Consultation is optional: use consult only for genuinely difficult, ambiguous, or high-risk planning where independent Fable advice materially helps; never treat it as an approval gate. get returns the complete current snapshot; set creates or fully replaces the current plan structure (omitted existing steps become superseded); progress atomically completes the current step and/or starts a ready step.",
 		promptSnippet:
-			"Consult, create, and update an explicitly requested living plan",
+			"Create and update an explicitly requested living plan",
 		promptGuidelines: [
 			"Use plan only when a /plan workflow is pending or a living plan already exists; never create a plan automatically for an ordinary session.",
+			"Fable consultation is optional. Use consult only for genuinely difficult, ambiguous, or high-risk planning; do not consult for routine work or when the user asks you not to.",
 			"When a living plan exists, use plan at step boundaries and revise it proactively when reality changes instead of waiting for the user to ask.",
 			"Before changing a living plan in a way that removes or defers a requested deliverable, relaxes acceptance criteria, contradicts a user decision, or rolls back completed work, ask the user; routine implementation and dependency changes do not need confirmation.",
 		],
@@ -229,16 +230,13 @@ export function registerPlanTool(
 					}
 					const consultationId =
 						params.consultationId ?? current?.consultationId;
-					if (!consultationId) {
-						throw new Error(
-							"Initial plan creation requires a successful Fable consultation",
-						);
-					}
-					const consultation = runtime.getConsultation(consultationId);
-					if (!consultation || consultation.requestId !== request.id) {
-						throw new Error(
-							`Consultation ${consultationId} is unavailable on the current session branch`,
-						);
+					if (consultationId) {
+						const consultation = runtime.getConsultation(consultationId);
+						if (!consultation || consultation.requestId !== request.id) {
+							throw new Error(
+								`Consultation ${consultationId} is unavailable on the current session branch`,
+							);
+						}
 					}
 					const input: SetPlanInput = {
 						baseRevision: params.baseRevision,

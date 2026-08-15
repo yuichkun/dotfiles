@@ -68,7 +68,7 @@ function setup(): {
 
 const context = {} as ExtensionContext;
 
-test("requires and consumes a branch-local Fable consultation for initial set", async () => {
+test("optionally consumes a branch-local Fable consultation for initial set", async () => {
 	const { runtime, tool, execArgs } = setup();
 	const consultationResult = await tool.execute(
 		"consult",
@@ -178,7 +178,41 @@ test("rendering keeps completion neutral and uses a self shell", () => {
 	assert.equal(completed, "<text>● Plan r4 · set</text>");
 });
 
-test("rejects initial plan creation without consultation", async () => {
+test("creates an initial plan without consultation", async () => {
+	const { runtime, tool, execArgs } = setup();
+	const result = await tool.execute(
+		"set",
+		{
+			op: "set",
+			baseRevision: 0,
+			title: "Direct plan",
+			objective: "Plan routine work directly",
+			reason: "Consultation is unnecessary",
+			steps: [
+				{
+					id: "S01",
+					phase: "Implementation",
+					title: "Implement the change",
+					shortTitle: "Implement",
+					goal: "Complete the routine task",
+					work: ["Make the focused change"],
+					acceptance: ["The change is validated"],
+					dependsOn: [],
+					relatedFiles: [],
+					status: "in_progress",
+				},
+			],
+		},
+		undefined,
+		undefined,
+		context,
+	);
+	assert.equal(result.details.kind, "plan");
+	assert.equal(runtime.getPlan()?.consultationId, undefined);
+	assert.equal(execArgs.length, 0);
+});
+
+test("rejects an explicitly supplied unknown consultation", async () => {
 	const { tool } = setup();
 	await assert.rejects(
 		tool.execute(
@@ -186,15 +220,16 @@ test("rejects initial plan creation without consultation", async () => {
 			{
 				op: "set",
 				baseRevision: 0,
-				title: "Invalid",
-				objective: "No consultation",
-				reason: "Should fail",
+				consultationId: "missing-consultation",
+				title: "Invalid advice",
+				objective: "Reject stale external advice",
+				reason: "Invalid consultation",
 				steps: [],
 			},
 			undefined,
 			undefined,
 			context,
 		),
-		/requires a successful Fable consultation/,
+		/unavailable on the current session branch/,
 	);
 });

@@ -37,7 +37,7 @@ export interface Plan {
 	id: string;
 	requestId: string;
 	request: string;
-	consultationId: string;
+	consultationId?: string;
 	title: string;
 	objective: string;
 	revision: number;
@@ -167,12 +167,14 @@ export function validatePlan(plan: Plan): void {
 		["plan.id", plan.id],
 		["plan.requestId", plan.requestId],
 		["plan.request", plan.request],
-		["plan.consultationId", plan.consultationId],
 		["plan.title", plan.title],
 		["plan.objective", plan.objective],
 		["plan.changeReason", plan.changeReason],
 	] as const) {
 		requireText(value, label);
+	}
+	if (plan.consultationId !== undefined) {
+		requireText(plan.consultationId, "plan.consultationId");
 	}
 	for (const [label, value] of [
 		["plan.createdAt", plan.createdAt],
@@ -300,7 +302,7 @@ export function createOrRevisePlan(options: {
 	input: SetPlanInput;
 	requestId: string;
 	request: string;
-	consultationId: string;
+	consultationId?: string;
 	now: string;
 	createId: () => string;
 }): Plan {
@@ -347,7 +349,9 @@ export function createOrRevisePlan(options: {
 		id: current?.id ?? options.createId(),
 		requestId: current?.requestId ?? options.requestId,
 		request: current?.request ?? requireText(options.request, "request"),
-		consultationId: options.consultationId,
+		...(options.consultationId
+			? { consultationId: requireText(options.consultationId, "consultationId") }
+			: {}),
 		title: requireText(input.title, "plan.title"),
 		objective: requireText(input.objective, "plan.objective"),
 		revision: expectedRevision + 1,

@@ -18,7 +18,7 @@ const request: PlanRequest = {
 
 const consultation: PlanConsultation = {
 	schemaVersion: 1,
-	id: TEST_PLAN.consultationId,
+	id: TEST_PLAN.consultationId ?? "consultation-test",
 	requestId: TEST_PLAN.requestId,
 	model: "fable",
 	effort: "max",

@@ -23,10 +23,11 @@ Raw request:
 ${request.task}
 
 1. Investigate the request and codebase before implementation. Read-only investigation and necessary commands are allowed.
-2. Before forming a candidate plan, call the plan tool with op="consult", requestId="${request.id}", and only observed facts, constraints, and open questions. Do not pass a proposed solution or desired conclusion.
-3. Critically evaluate the independent Fable response, then call the plan tool with op="set", baseRevision=0, the returned consultationId, and the complete dependency-aware plan.
-4. Use 5–15 meaningful steps when appropriate. Keep near-term steps detailed and distant steps coarser. Set at most one step to in_progress.
-5. After the plan is saved, continue the task normally without an approval gate. Keep the plan current with the plan tool at step boundaries and whenever the structure changes.
+2. Create the dependency-aware plan directly for routine work. Call the plan tool with op="set" and baseRevision=0; no consultation is required.
+3. Use op="consult" only when the task is genuinely difficult, ambiguous, or high-risk and independent advice would materially help. Pass only observed facts, constraints, and open questions—never a proposed solution. Fable is optional advice, not an approval authority. Do not consult when the user asks you not to.
+4. If you consulted, critically evaluate the response and include its consultationId in set. Otherwise omit consultationId.
+5. Use 5–15 meaningful steps when appropriate. Keep near-term steps detailed and distant steps coarser. Set at most one step to in_progress.
+6. After the plan is saved, continue the task normally without an approval gate. Keep the plan current with the plan tool at step boundaries and whenever the structure changes.
 </plan-workflow>`;
 }
 
@@ -93,7 +94,7 @@ export function buildPlanContext(
 	}
 
 	lines.push(
-		"Re-consult with plan op=\"consult\" before a structural replan that reinterprets the goal or acceptance criteria, reverses completed work, or changes the critical path.",
+		"Fable consultation is optional. Use plan op=\"consult\" only for genuinely difficult, ambiguous, or high-risk planning where independent advice materially helps. Do not consult for routine updates or when the user asks you not to; consultation is never an approval gate.",
 		"Ask the user before removing or deferring a requested deliverable, relaxing acceptance criteria, contradicting a user decision, or rolling back completed work. Apply routine implementation and dependency changes without asking.",
 		"Keep routine plan updates out of the prose response; briefly report only material structural changes.",
 		"</living-plan>",
