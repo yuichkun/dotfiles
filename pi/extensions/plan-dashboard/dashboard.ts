@@ -35,6 +35,7 @@ import {
 import { PlanRuntime } from "./state.ts";
 
 const DEFAULT_TERMINAL_ROWS = 30;
+const RECENT_RESOLVED_STEP_LIMIT = 5;
 
 type CanvasStyle =
 	| "plain"
@@ -460,8 +461,9 @@ export class PlanDashboardComponent extends BaseModal<void> {
 	private readonly turnsSinceUpdate: number;
 	private readonly views: readonly PlanStepView[];
 	private readonly viewsById: ReadonlyMap<string, PlanStepView>;
-	private selectedStepId: string;
+	private selectedStepId = "";
 	private detailOpen = false;
+	private showResolved = false;
 	private detailScroll = 0;
 	private lastDetailMaxScroll = 0;
 	private dependencyHighlight = false;
@@ -483,12 +485,7 @@ export class PlanDashboardComponent extends BaseModal<void> {
 		this.viewsById = new Map(
 			this.views.map((view) => [view.step.id, view]),
 		);
-		this.selectedStepId =
-			this.views.find((view) => view.status === "in_progress")?.step
-				.id ??
-			this.views.find((view) => view.status === "ready")?.step.id ??
-			this.views[0]?.step.id ??
-			"";
+		this.returnToCurrentOrFrontier();
 	}
 
 	override handleInput(data: string): void {
@@ -498,6 +495,19 @@ export class PlanDashboardComponent extends BaseModal<void> {
 		}
 		if (this.isCancelInput(data)) {
 			this.close();
+			return;
+		}
+		if (matchesKey(data, "a")) {
+			this.showResolved = !this.showResolved;
+			if (
+				!this.getVisibleViews().some(
+					(view) => view.step.id === this.selectedStepId,
+				)
+			) {
+				this.returnToCurrentOrFrontier();
+			}
+			this.lastLayout = undefined;
+			this.requestRender();
 			return;
 		}
 		if (this.keybindings.matches(data, "tui.select.up")) {
@@ -563,7 +573,7 @@ export class PlanDashboardComponent extends BaseModal<void> {
 		lines.push(frame.row(this.renderSelectedGoal(selected)));
 		lines.push(
 			frame.row(
-				` ${paint(this.theme, "tertiary", "←→ stages · ↑↓ lane · Tab frontier · d trace dependencies · 0 current · Enter details · Esc close")}`,
+				` ${paint(this.theme, "tertiary", "←→ stages · ↑↓ lane · Tab frontier · d trace · a resolved · 0 current · Enter details · Esc close")}`,
 			),
 		);
 		lines.push(frame.bottom());
@@ -621,7 +631,7 @@ export class PlanDashboardComponent extends BaseModal<void> {
 	}
 
 	private renderGraph(width: number, height: number): string[] {
-		const layout = createGraphLayout(this.views, width, height);
+		const layout = createGraphLayout(this.getVisibleViews(), width, height);
 		this.lastLayout = layout;
 		const canvas = new DiagramCanvas(layout.worldWidth, layout.worldHeight);
 		const nodesById = new Map(
@@ -830,7 +840,7 @@ export class PlanDashboardComponent extends BaseModal<void> {
 
 	private getRelatedStepIds(): Set<string> {
 		if (!this.dependencyHighlight) {
-			return new Set(this.views.map((view) => view.step.id));
+			return new Set(this.getVisibleViews().map((view) => view.step.id));
 		}
 		const related = new Set<string>([this.selectedStepId]);
 		const addAncestors = (stepId: string): void => {
@@ -898,6 +908,44 @@ export class PlanDashboardComponent extends BaseModal<void> {
 			(view) => view.status === "in_progress",
 		);
 		if (current) this.selectStep(current.step.id);
+	}
+
+	private returnToCurrentOrFrontier(): void {
+		const visible = this.getVisibleViews();
+		const target =
+			visible.find((view) => view.status === "in_progress") ??
+			visible.find((view) => view.status === "ready") ??
+			visible[0];
+		if (target) this.selectedStepId = target.step.id;
+	}
+
+	private getVisibleViews(): readonly PlanStepView[] {
+		if (this.showResolved) return this.views;
+		const resolved = this.views.filter(
+			(view) => view.status === "done" || view.status === "superseded",
+		);
+		const sourceOrder = new Map(
+			this.views.map((view, index) => [view.step.id, index]),
+		);
+		const recentResolved = new Set(
+			[...resolved]
+				.sort((left, right) => {
+					const timeDifference =
+						Date.parse(right.step.updatedAt) - Date.parse(left.step.updatedAt);
+					if (timeDifference !== 0) return timeDifference;
+					return (
+						(sourceOrder.get(right.step.id) ?? 0) -
+						(sourceOrder.get(left.step.id) ?? 0)
+					);
+				})
+				.slice(0, RECENT_RESOLVED_STEP_LIMIT)
+				.map((view) => view.step.id),
+		);
+		return this.views.filter(
+			(view) =>
+				(view.status !== "done" && view.status !== "superseded") ||
+				recentResolved.has(view.step.id),
+		);
 	}
 
 	private selectStep(stepId: string): void {

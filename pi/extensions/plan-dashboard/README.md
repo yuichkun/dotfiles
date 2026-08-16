@@ -93,9 +93,12 @@ Plan作成要求はCustom Entry、Fable consultationとPlan snapshotは`plan` To
 - `↑` / `↓`: 同じstage内を移動
 - `Tab`: 実行中・着手可能Stepを巡回
 - `d`: 選択Stepの祖先・子孫経路を強調
+- `a`: resolved Stepの省略/全表示
 - `0` / `Home`: 実行中Stepへ戻る
 - `Enter`: 選択Stepの詳細
 - `Esc`: 閉じる
+
+Overviewは未解決Stepと直近5件のresolved Stepを標準表示し、古いresolved Stepは省略する。
 
 ### Detail
 

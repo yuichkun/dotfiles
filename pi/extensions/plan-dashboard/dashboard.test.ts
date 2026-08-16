@@ -279,6 +279,7 @@ test("keeps manually compacted progress visible without requiring active history
 		"\t",
 		"d",
 		"0",
+		"a",
 	]) {
 		emptyComponent.handleInput(input);
 		assertWidthSafe(emptyComponent.render(120), 120);
@@ -286,7 +287,48 @@ test("keeps manually compacted progress visible without requiring active history
 	emptyComponent.handleInput(keyByAction["tui.select.confirm"]!);
 	const afterEnter = emptyComponent.render(120).join("\n");
 	assert.match(afterEnter, /Plan Dashboard/);
+	assert.match(afterEnter, /a resolved/);
 	assert.doesNotMatch(afterEnter, /Plan Step/);
+});
+
+test("lays out successors safely when older resolved dependencies are hidden", () => {
+	const plan = {
+		...TEST_PLAN,
+		steps: TEST_PLAN.steps.map((step, index) => {
+			if (index < 6) {
+				return {
+					...step,
+					status: "done" as const,
+					...(step.id === "S01" ? { shortTitle: "RESOLVED1" } : {}),
+				};
+			}
+			if (step.id === "S07") {
+				return {
+					...step,
+					shortTitle: "SUCCESSOR",
+					dependsOn: [...step.dependsOn, "S01"],
+				};
+			}
+			return step;
+		}),
+	};
+	const component = createComponent(
+		40,
+		{ workSinceUpdate: 0, turnsSinceUpdate: 0 },
+		undefined,
+		plan,
+	);
+	const compact = component.render(180);
+	assertWidthSafe(compact, 180);
+	assert.doesNotMatch(compact.join("\n"), /RESOLVED1/);
+	assert.match(compact.join("\n"), /SUCCESSOR/);
+	component.handleInput("a");
+	component.handleInput(keyByAction["tui.select.down"]!);
+	const all = component.render(180);
+	assertWidthSafe(all, 180);
+	assert.match(all.join("\n"), /RESOLVED1/);
+	component.handleInput("a");
+	assert.doesNotMatch(component.render(180).join("\n"), /RESOLVED1/);
 });
 
 test("dependency trace keeps the full map and marks trace mode", () => {
