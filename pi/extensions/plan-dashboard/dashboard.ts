@@ -568,7 +568,7 @@ export class PlanDashboardComponent extends BaseModal<void> {
 	}
 
 	private renderSummaryLine(width: number): string {
-		const summary = summarizePlan(this.views);
+		const summary = summarizePlan(this.views, this.plan.archivedSteps);
 		const progressWidth = Math.max(12, Math.min(30, Math.floor(width * 0.24)));
 		const resolved = summary.done + summary.superseded;
 		const doneWidth = Math.round(
@@ -589,6 +589,9 @@ export class PlanDashboardComponent extends BaseModal<void> {
 			);
 		const metrics = [
 			paint(this.theme, "completed", `✔ done ${summary.done}`),
+			...(summary.archived > 0
+				? [paint(this.theme, "tertiary", `▣ compacted ${summary.archived}`)]
+				: []),
 			...(summary.superseded > 0
 				? [paint(this.theme, "tertiary", `⊘ superseded ${summary.superseded}`)]
 				: []),

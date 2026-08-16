@@ -8,6 +8,7 @@ import {
 	applyPlanProgress,
 	buildPlanViews,
 	createOrRevisePlan,
+	summarizePlan,
 	type PlanStepInput,
 	type ProgressPlanInput,
 	type SetPlanInput,
@@ -120,9 +121,13 @@ function normalizeFact(fact: ObservedFact, index: number): ObservedFact {
 	};
 }
 
-function compactPlanResult(plan: ReturnType<PlanRuntime["getPlan"]>): string {
+function compactPlanResult(
+	plan: ReturnType<PlanRuntime["getPlan"]>,
+	compactedSteps: readonly PlanStepInput[] = [],
+): string {
 	if (!plan) return "Plan unavailable";
 	const views = buildPlanViews(plan);
+	const summary = summarizePlan(views, plan.archivedSteps);
 	const current = views.find((view) => view.status === "in_progress");
 	const ready = views.filter((view) => view.status === "ready");
 	return [
@@ -131,6 +136,10 @@ function compactPlanResult(plan: ReturnType<PlanRuntime["getPlan"]>): string {
 			? `Current: ${current.step.id} — ${current.step.title}`
 			: "Current: none",
 		`Ready: ${ready.map((view) => view.step.id).join(", ") || "none"}`,
+		`Active: ${summary.active}; compacted: ${summary.archived}`,
+		...(compactedSteps.length > 0
+			? [`Compacted now: ${compactedSteps.map((step) => step.id).join(", ")}`]
+			: []),
 	].join("\n");
 }
 
@@ -142,13 +151,14 @@ export function registerPlanTool(
 		name: PLAN_TOOL_NAME,
 		label: "Plan",
 		description:
-			"Create and maintain the living plan explicitly requested with /plan. Do not create a plan unless a /plan request is pending. Consultation is optional: use consult only for genuinely difficult, ambiguous, or high-risk planning where independent Fable advice materially helps; never treat it as an approval gate. get returns the complete current snapshot; set creates or fully replaces the current plan structure (omitted existing steps become superseded); progress atomically completes the current step and/or starts a ready step.",
+			"Create and maintain the living plan explicitly requested with /plan. Do not create a plan unless a /plan request is pending. Consultation is optional: use consult only for genuinely difficult, ambiguous, or high-risk planning where independent Fable advice materially helps; never treat it as an approval gate. get returns the complete current snapshot; set creates or fully replaces the active structure (omitted existing steps become superseded); progress atomically completes the current step and/or starts a ready step. Large mutations may automatically compact resolved active steps while retaining dependency tombstones. Archived step IDs must not be reintroduced by set; use get after automatic compaction when the active snapshot is unclear.",
 		promptSnippet:
 			"Create and update an explicitly requested living plan",
 		promptGuidelines: [
 			"Use plan only when a /plan workflow is pending or a living plan already exists; never create a plan automatically for an ordinary session.",
 			"Fable consultation is optional. Use consult only for genuinely difficult, ambiguous, or high-risk planning; do not consult for routine work or when the user asks you not to.",
 			"When a living plan exists, use plan at step boundaries and revise it proactively when reality changes instead of waiting for the user to ask.",
+			"After automatic plan compaction, never include archived step IDs in a later plan set operation; use plan get first when the active snapshot is unclear.",
 			"Before changing a living plan in a way that removes or defers a requested deliverable, relaxes acceptance criteria, contradicts a user decision, or rolls back completed work, ask the user; routine implementation and dependency changes do not need confirmation.",
 		],
 		parameters: PlanToolParameters,
@@ -245,7 +255,7 @@ export function registerPlanTool(
 						reason: params.reason,
 						steps: params.steps as readonly PlanStepInput[],
 					};
-					const plan = createOrRevisePlan({
+					const mutation = createOrRevisePlan({
 						current,
 						input,
 						requestId: request.id,
@@ -254,10 +264,20 @@ export function registerPlanTool(
 						now: new Date().toISOString(),
 						createId: randomUUID,
 					});
-					runtime.applyPlan(plan);
+					runtime.applyPlan(mutation.plan);
 					return {
-						content: [{ type: "text", text: compactPlanResult(plan) }],
-						details: { kind: "plan", operation: "set", plan },
+						content: [{
+							type: "text",
+							text: compactPlanResult(mutation.plan, mutation.compactedSteps),
+						}],
+						details: {
+							kind: "plan",
+							operation: "set",
+							plan: mutation.plan,
+							...(mutation.compactedSteps.length > 0
+								? { compactedSteps: mutation.compactedSteps }
+								: {}),
+						},
 					};
 				}
 				case "progress": {
@@ -271,15 +291,25 @@ export function registerPlanTool(
 						start: params.start,
 						note: params.note,
 					};
-					const plan = applyPlanProgress(
+					const mutation = applyPlanProgress(
 						current,
 						input,
 						new Date().toISOString(),
 					);
-					runtime.applyPlan(plan);
+					runtime.applyPlan(mutation.plan);
 					return {
-						content: [{ type: "text", text: compactPlanResult(plan) }],
-						details: { kind: "plan", operation: "progress", plan },
+						content: [{
+							type: "text",
+							text: compactPlanResult(mutation.plan, mutation.compactedSteps),
+						}],
+						details: {
+							kind: "plan",
+							operation: "progress",
+							plan: mutation.plan,
+							...(mutation.compactedSteps.length > 0
+								? { compactedSteps: mutation.compactedSteps }
+								: {}),
+						},
 					};
 				}
 			}

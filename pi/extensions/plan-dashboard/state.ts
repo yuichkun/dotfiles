@@ -1,5 +1,10 @@
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
-import { migratePlan, validatePlan, type Plan } from "./plan.ts";
+import {
+	migratePlan,
+	validatePlan,
+	type Plan,
+	type PlanStep,
+} from "./plan.ts";
 
 export const PLAN_REQUEST_ENTRY = "living-plan.request";
 export const PLAN_TOOL_NAME = "plan";
@@ -38,6 +43,7 @@ export interface PlanSnapshotToolDetails {
 	kind: "plan";
 	operation: "set" | "progress";
 	plan: Plan;
+	compactedSteps?: readonly PlanStep[];
 }
 
 export interface PlanInspectionToolDetails {
@@ -123,7 +129,8 @@ export function isPlanToolDetails(value: unknown): value is PlanToolDetails {
 	return (
 		value.kind === "plan" &&
 		(value.operation === "set" || value.operation === "progress") &&
-		isRecord(value.plan)
+		isRecord(value.plan) &&
+		(value.compactedSteps === undefined || Array.isArray(value.compactedSteps))
 	);
 }
 

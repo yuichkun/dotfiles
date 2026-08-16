@@ -66,7 +66,7 @@ export class PlanProgressHeader {
 		width: number,
 		views: readonly PlanStepView[],
 	): string {
-		const summary = summarizePlan(views);
+		const summary = summarizePlan(views, this.state.plan.archivedSteps);
 		const label = " PROGRESS  ";
 		const bracketWidth = 2;
 		const barWidth = Math.max(

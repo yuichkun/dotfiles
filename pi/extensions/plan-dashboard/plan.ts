@@ -1,6 +1,9 @@
 export const PLAN_SCHEMA_VERSION = 2 as const;
 const LEGACY_PLAN_SCHEMA_VERSION = 1 as const;
 export const MAX_PLAN_STEPS = 50;
+const AUTO_COMPACT_STEP_THRESHOLD = 20;
+const AUTO_COMPACT_TERMINAL_THRESHOLD = 10;
+const AUTO_COMPACT_RETAIN_TERMINAL_STEPS = 5;
 
 export type StoredStepStatus =
 	| "pending"
@@ -39,8 +42,9 @@ export interface PlanStep extends PlanStepInput {
 }
 
 /**
- * Minimal resolved-step tombstone kept in the current snapshot. Full step
- * details remain recoverable from older tool results in the branch history.
+ * Minimal resolved-step tombstone kept in the current snapshot after
+ * compaction. Full step details remain recoverable from older tool results in
+ * the branch history.
  */
 export interface ArchivedPlanStep {
 	id: string;
@@ -80,6 +84,11 @@ export interface ProgressPlanInput {
 	note: string;
 }
 
+export interface PlanMutationResult {
+	plan: Plan;
+	compactedSteps: readonly PlanStep[];
+}
+
 export interface PlanStepView {
 	step: PlanStep;
 	status: DisplayStepStatus;
@@ -89,6 +98,8 @@ export interface PlanStepView {
 
 export interface PlanSummary {
 	total: number;
+	active: number;
+	archived: number;
 	done: number;
 	inProgress: number;
 	ready: number;
@@ -185,7 +196,10 @@ export function dependencyIsResolved(step: PlanStep): boolean {
 	return isTerminalStatus(step.status);
 }
 
-export function validatePlan(plan: Plan): void {
+function validatePlanInternal(
+	plan: Plan,
+	options: { allowActiveStepOverflow?: boolean } = {},
+): void {
 	if (!isRecord(plan)) {
 		throw new PlanValidationError("plan must be an object");
 	}
@@ -218,6 +232,7 @@ export function validatePlan(plan: Plan): void {
 	if (!Number.isInteger(plan.revision) || plan.revision < 1) {
 		throw new PlanValidationError("plan.revision must be a positive integer");
 	}
+
 	const rawSteps: unknown = plan.steps;
 	const rawArchivedSteps: unknown = plan.archivedSteps;
 	if (!Array.isArray(rawSteps)) {
@@ -229,7 +244,10 @@ export function validatePlan(plan: Plan): void {
 	if (rawSteps.length === 0) {
 		throw new PlanValidationError("A plan needs at least one active step");
 	}
-	if (rawSteps.length > MAX_PLAN_STEPS) {
+	if (
+		rawSteps.length > MAX_PLAN_STEPS &&
+		!options.allowActiveStepOverflow
+	) {
 		throw new PlanValidationError(
 			`A plan may contain at most ${MAX_PLAN_STEPS} active steps`,
 		);
@@ -367,6 +385,10 @@ export function validatePlan(plan: Plan): void {
 	}
 }
 
+export function validatePlan(plan: Plan): void {
+	validatePlanInternal(plan);
+}
+
 /** Convert a persisted schema-v1 snapshot to v2 without losing active steps. */
 export function migratePlan(value: unknown): Plan {
 	if (!isRecord(value)) {
@@ -392,6 +414,77 @@ export function migratePlan(value: unknown): Plan {
 	return migrated;
 }
 
+function archiveSteps(
+	plan: Plan,
+	stepIds: ReadonlySet<string>,
+	now: string,
+): PlanMutationResult {
+	const compactedSteps = plan.steps.filter((step) => stepIds.has(step.id));
+	if (compactedSteps.length === 0) {
+		validatePlan(plan);
+		return { plan, compactedSteps: [] };
+	}
+	for (const step of compactedSteps) {
+		if (!isTerminalStatus(step.status)) {
+			throw new PlanValidationError(
+				`Only done or superseded steps can be compacted: ${step.id}`,
+			);
+		}
+	}
+	const archivedSteps: ArchivedPlanStep[] = [
+		...plan.archivedSteps,
+		...compactedSteps.map((step) => ({
+			id: step.id,
+			phase: step.phase,
+			status: step.status as TerminalStepStatus,
+			compactedAt: now,
+		})),
+	];
+	const compactedPlan: Plan = {
+		...plan,
+		steps: plan.steps.filter((step) => !stepIds.has(step.id)),
+		archivedSteps,
+	};
+	validatePlan(compactedPlan);
+	return { plan: compactedPlan, compactedSteps };
+}
+
+function autoCompact(plan: Plan, now: string): PlanMutationResult {
+	// Validate the complete candidate before removing details. The only relaxed
+	// rule is the active-step cap that this function is responsible for fixing.
+	validatePlanInternal(plan, { allowActiveStepOverflow: true });
+	const terminal = plan.steps.filter((step) => isTerminalStatus(step.status));
+	const overflow = Math.max(0, plan.steps.length - MAX_PLAN_STEPS);
+	const thresholdReached =
+		plan.steps.length > AUTO_COMPACT_STEP_THRESHOLD &&
+		terminal.length > AUTO_COMPACT_TERMINAL_THRESHOLD;
+	if (!thresholdReached && overflow === 0) {
+		validatePlan(plan);
+		return { plan, compactedSteps: [] };
+	}
+
+	const sourceOrder = new Map(
+		plan.steps.map((step, index) => [step.id, index]),
+	);
+	const newestFirst = [...terminal].sort((left, right) => {
+		const timeDifference =
+			Date.parse(right.updatedAt) - Date.parse(left.updatedAt);
+		if (timeDifference !== 0) return timeDifference;
+		return (sourceOrder.get(right.id) ?? 0) - (sourceOrder.get(left.id) ?? 0);
+	});
+	const retainCount = Math.min(
+		AUTO_COMPACT_RETAIN_TERMINAL_STEPS,
+		Math.max(0, terminal.length - overflow),
+	);
+	const retained = new Set(
+		newestFirst.slice(0, retainCount).map((step) => step.id),
+	);
+	const compactIds = new Set(
+		terminal.filter((step) => !retained.has(step.id)).map((step) => step.id),
+	);
+	return archiveSteps(plan, compactIds, now);
+}
+
 export function createOrRevisePlan(options: {
 	current?: Plan;
 	input: SetPlanInput;
@@ -400,7 +493,7 @@ export function createOrRevisePlan(options: {
 	consultationId?: string;
 	now: string;
 	createId: () => string;
-}): Plan {
+}): PlanMutationResult {
 	const { current, input, now } = options;
 	const expectedRevision = current?.revision ?? 0;
 	if (input.baseRevision !== expectedRevision) {
@@ -409,6 +502,11 @@ export function createOrRevisePlan(options: {
 		);
 	}
 
+	if (input.steps.length > MAX_PLAN_STEPS) {
+		throw new PlanValidationError(
+			`A plan update may contain at most ${MAX_PLAN_STEPS} steps`,
+		);
+	}
 	const previousById = new Map(
 		(current?.steps ?? []).map((step) => [step.id, step]),
 	);
@@ -464,15 +562,14 @@ export function createOrRevisePlan(options: {
 		steps,
 		archivedSteps: current?.archivedSteps ?? [],
 	};
-	validatePlan(plan);
-	return plan;
+	return autoCompact(plan, now);
 }
 
 export function applyPlanProgress(
 	current: Plan,
 	input: ProgressPlanInput,
 	now: string,
-): Plan {
+): PlanMutationResult {
 	if (input.baseRevision !== current.revision) {
 		throw new PlanValidationError(
 			`Stale plan revision: expected ${current.revision}, received ${input.baseRevision}`,
@@ -536,8 +633,7 @@ export function applyPlanProgress(
 		updatedAt: now,
 		steps,
 	};
-	validatePlan(plan);
-	return plan;
+	return autoCompact(plan, now);
 }
 
 export function buildPlanViews(plan: Plan): PlanStepView[] {
@@ -579,13 +675,23 @@ export function buildPlanViews(plan: Plan): PlanStepView[] {
 	});
 }
 
-export function summarizePlan(views: readonly PlanStepView[]): PlanSummary {
+export function summarizePlan(
+	views: readonly PlanStepView[],
+	archivedSteps: readonly ArchivedPlanStep[],
+): PlanSummary {
+	const archivedDone = archivedSteps.filter((step) => step.status === "done").length;
+	const archivedSuperseded = archivedSteps.length - archivedDone;
 	return {
-		total: views.length,
-		done: views.filter((view) => view.status === "done").length,
+		total: views.length + archivedSteps.length,
+		active: views.length,
+		archived: archivedSteps.length,
+		done:
+			views.filter((view) => view.status === "done").length + archivedDone,
 		inProgress: views.filter((view) => view.status === "in_progress").length,
 		ready: views.filter((view) => view.status === "ready").length,
 		blocked: views.filter((view) => view.status === "blocked").length,
-		superseded: views.filter((view) => view.status === "superseded").length,
+		superseded:
+			views.filter((view) => view.status === "superseded").length +
+			archivedSuperseded,
 	};
 }

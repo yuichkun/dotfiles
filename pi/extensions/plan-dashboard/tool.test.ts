@@ -21,7 +21,10 @@ interface ExecutablePlanTool {
 		signal: AbortSignal | undefined,
 		onUpdate: undefined,
 		ctx: ExtensionContext,
-	): Promise<{ details: PlanToolDetails }>;
+	): Promise<{
+		content: Array<{ type: "text"; text: string }>;
+		details: PlanToolDetails;
+	}>;
 	renderCall(args: { op: string }, theme: Theme): Renderable;
 	renderResult(
 		result: {
@@ -210,6 +213,60 @@ test("creates an initial plan without consultation", async () => {
 	assert.equal(result.details.kind, "plan");
 	assert.equal(runtime.getPlan()?.consultationId, undefined);
 	assert.equal(execArgs.length, 0);
+});
+
+test("returns full details for steps compacted automatically by set", async () => {
+	const { runtime, tool } = setup();
+	const steps = Array.from({ length: 21 }, (_, index) => ({
+		id: `S${String(index + 1).padStart(2, "0")}`,
+		phase: "History",
+		title: `Step ${index + 1}`,
+		shortTitle: `Step ${index + 1}`,
+		goal: "Bound active history",
+		work: ["Perform the work"],
+		acceptance: ["The work is complete"],
+		dependsOn: [],
+		relatedFiles: [],
+		status: index < 11 ? "done" : "pending",
+	}));
+	const result = await tool.execute(
+		"set",
+		{
+			op: "set",
+			baseRevision: 0,
+			title: "Automatically compacted plan",
+			objective: "Persist compacted details",
+			reason: "Initial plan",
+			steps,
+		},
+		undefined,
+		undefined,
+		context,
+	);
+	assert.equal(result.details.kind, "plan");
+	if (result.details.kind === "plan") {
+		assert.equal(result.details.operation, "set");
+		assert.deepEqual(
+			result.details.compactedSteps?.map((step) => step.id),
+			["S01", "S02", "S03", "S04", "S05", "S06"],
+		);
+	}
+	assert.equal(runtime.getPlan()?.archivedSteps.length, 6);
+	assert.match(result.content[0]?.text ?? "", /Active: 15; compacted: 6/);
+	assert.match(
+		result.content[0]?.text ?? "",
+		/Compacted now: S01, S02, S03, S04, S05, S06/,
+	);
+
+	const inspection = await tool.execute(
+		"get",
+		{ op: "get" },
+		undefined,
+		undefined,
+		context,
+	);
+	assert.match(inspection.content[0]?.text ?? "", /"archivedSteps"/);
+	assert.match(inspection.content[0]?.text ?? "", /"id": "S01"/);
 });
 
 test("rejects an explicitly supplied unknown consultation", async () => {

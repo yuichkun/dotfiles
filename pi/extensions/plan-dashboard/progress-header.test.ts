@@ -104,6 +104,25 @@ test("uses warning only for severe staleness", () => {
 	assert.match(severe, /<warning> · ⚠ STALE/);
 });
 
+test("keeps unbounded compacted totals width-safe", () => {
+	const plan = {
+		...TEST_PLAN,
+		archivedSteps: Array.from({ length: 120 }, (_, index) => ({
+			id: `A${String(index + 1).padStart(3, "0")}`,
+			phase: "History",
+			status: "done" as const,
+			compactedAt: "2026-01-02T00:00:00.000Z",
+		})),
+	};
+	for (const width of [40, 80, 120, 180]) {
+		const lines = new PlanProgressHeader(
+			{ plan, workSinceUpdate: 0, turnsSinceUpdate: 0 },
+			theme,
+		).render(width);
+		for (const line of lines) assert.ok(visibleWidth(line) <= width);
+	}
+});
+
 test("keeps every header line within the terminal width", () => {
 	for (const width of [40, 80, 120, 180]) {
 		const lines = header(12, 8).render(width);

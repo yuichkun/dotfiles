@@ -8,6 +8,7 @@ import type { TUI } from "@earendil-works/pi-tui";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import type { ModalContext } from "../shared/modal.ts";
 import { PlanDashboardComponent } from "./dashboard.ts";
+import { createOrRevisePlan, type PlanStepInput } from "./plan.ts";
 import { TEST_PLAN } from "./test-fixture.ts";
 
 const keyByAction: Record<string, string> = {
@@ -166,6 +167,60 @@ test("shows factual staleness in the dashboard summary", () => {
 		turnsSinceUpdate: 1,
 	}).render(140).join("\n");
 	assert.match(output, /STALE 5 work \/ 1 turns/);
+});
+
+test("keeps automatically compacted progress visible", () => {
+	const steps: PlanStepInput[] = Array.from({ length: 21 }, (_, index) => ({
+		id: `S${String(index + 1).padStart(2, "0")}`,
+		phase: "History",
+		title: `Step ${index + 1}`,
+		shortTitle: `Step ${index + 1}`,
+		goal: "Bound active history",
+		work: ["Perform the work"],
+		acceptance: ["The work is complete"],
+		dependsOn: index === 11 ? ["S01"] : [],
+		relatedFiles: [],
+		status: index < 11 ? "done" : "pending",
+	}));
+	const { plan } = createOrRevisePlan({
+		input: {
+			baseRevision: 0,
+			title: "Automatically compacted plan",
+			objective: "Keep automatic compaction visible",
+			reason: "Initial plan",
+			steps,
+		},
+		requestId: "request-dashboard-compact",
+		request: "Compact dashboard history",
+		now: "2026-01-02T00:00:00.000Z",
+		createId: () => "plan-dashboard-compact",
+	});
+	for (const width of [48, 80, 100, 140]) {
+		const lines = createComponent(
+			40,
+			{ workSinceUpdate: 0, turnsSinceUpdate: 0 },
+			undefined,
+			plan,
+		).render(width);
+		assertWidthSafe(lines, width);
+		if (width === 140) {
+			assert.match(lines.join("\n"), /11\/21/);
+			assert.match(lines.join("\n"), /compacted 6/);
+		}
+	}
+	const interactive = createComponent(
+		40,
+		{ workSinceUpdate: 0, turnsSinceUpdate: 0 },
+		undefined,
+		plan,
+	);
+	interactive.render(140);
+	interactive.handleInput("d");
+	assertWidthSafe(interactive.render(140), 140);
+	interactive.handleInput("\r");
+	const detail = interactive.render(120).join("\n");
+	assert.match(detail, /Plan Step · S12/);
+	assert.match(detail, /← S01/);
 });
 
 test("dependency trace keeps the full map and marks trace mode", () => {

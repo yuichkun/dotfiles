@@ -30,8 +30,10 @@ function stepInputs(plan: Plan): PlanStepInput[] {
 
 test("derives ready and blocked states from stored dependencies", () => {
 	const views = buildPlanViews(TEST_PLAN);
-	assert.deepEqual(summarizePlan(views), {
+	assert.deepEqual(summarizePlan(views, TEST_PLAN.archivedSteps), {
 		total: 15,
+		active: 15,
+		archived: 0,
 		done: 3,
 		inProgress: 1,
 		ready: 2,
@@ -168,10 +170,203 @@ test("rejects malformed archived tombstones", () => {
 	assert.throws(() => validatePlan(malformed), /Duplicate step id: S01/);
 });
 
+test("rejects malformed terminal steps before automatic compaction removes their details", () => {
+	const steps: PlanStepInput[] = Array.from({ length: 21 }, (_, index) => ({
+		id: `S${String(index + 1).padStart(2, "0")}`,
+		phase: "History",
+		title: `Completed step ${index + 1}`,
+		shortTitle: `Step ${index + 1}`,
+		goal: "Complete historical work",
+		work: ["Perform the work"],
+		acceptance: ["The work is complete"],
+		dependsOn: index === 0 ? ["S01"] : [],
+		relatedFiles: [],
+		status: "done",
+	}));
+	assert.throws(
+		() =>
+			createOrRevisePlan({
+				input: {
+					baseRevision: 0,
+					title: "Malformed long plan",
+					objective: "Reject invalid archived history",
+					reason: "Initial plan",
+					steps,
+				},
+				requestId: "request-malformed",
+				request: "Malformed task",
+				now: "2026-01-02T00:00:00.000Z",
+				createId: () => "plan-malformed",
+			}),
+		/depends on itself/,
+	);
+});
+
+test("rejects set input beyond the step cap", () => {
+	const steps: PlanStepInput[] = Array.from({ length: 51 }, (_, index) => ({
+		id: `S${String(index + 1).padStart(2, "0")}`,
+		phase: "Work",
+		title: `Pending step ${index + 1}`,
+		shortTitle: `Step ${index + 1}`,
+		goal: "Complete planned work",
+		work: ["Perform the work"],
+		acceptance: ["The work is complete"],
+		dependsOn: [],
+		relatedFiles: [],
+		status: "pending",
+	}));
+	assert.throws(
+		() =>
+			createOrRevisePlan({
+				input: {
+					baseRevision: 0,
+					title: "Overflowing plan",
+					objective: "Reject uncompactable overflow",
+					reason: "Initial plan",
+					steps,
+				},
+				requestId: "request-overflow",
+				request: "Overflow task",
+				now: "2026-01-02T00:00:00.000Z",
+				createId: () => "plan-overflow",
+			}),
+		/at most 50 steps/,
+	);
+});
+
+test("compacts an omitted step when revising a plan already at the active cap", () => {
+	const initialSteps: PlanStepInput[] = Array.from({ length: 50 }, (_, index) => ({
+		id: `S${String(index + 1).padStart(2, "0")}`,
+		phase: "Work",
+		title: `Pending step ${index + 1}`,
+		shortTitle: `Step ${index + 1}`,
+		goal: "Complete planned work",
+		work: ["Perform the work"],
+		acceptance: ["The work is complete"],
+		dependsOn: [],
+		relatedFiles: [],
+		status: "pending",
+	}));
+	const initial = createOrRevisePlan({
+		input: {
+			baseRevision: 0,
+			title: "Full plan",
+			objective: "Exercise the active cap",
+			reason: "Initial plan",
+			steps: initialSteps,
+		},
+		requestId: "request-full",
+		request: "Full task",
+		now: "2026-01-02T00:00:00.000Z",
+		createId: () => "plan-full",
+	}).plan;
+	const replacement: PlanStepInput = {
+		...initialSteps[0]!,
+		id: "S51",
+		title: "Replacement step",
+		shortTitle: "Replacement",
+	};
+	const mutation = createOrRevisePlan({
+		current: initial,
+		input: {
+			baseRevision: 1,
+			title: initial.title,
+			objective: initial.objective,
+			reason: "Replace one step",
+			steps: [...initialSteps.slice(1), replacement],
+		},
+		requestId: initial.requestId,
+		request: initial.request,
+		now: "2026-01-03T00:00:00.000Z",
+		createId: () => "unused",
+	});
+	assert.equal(mutation.plan.steps.length, 50);
+	assert.equal(mutation.plan.archivedSteps.length, 1);
+	assert.equal(mutation.plan.archivedSteps[0]?.id, "S01");
+});
+
+test("retains the five newest terminal steps after automatic compaction", () => {
+	const steps: PlanStepInput[] = Array.from({ length: 21 }, (_, index) => ({
+		id: `S${String(index + 1).padStart(2, "0")}`,
+		phase: "History",
+		title: `Completed step ${index + 1}`,
+		shortTitle: `Step ${index + 1}`,
+		goal: "Complete historical work",
+		work: ["Perform the work"],
+		acceptance: ["The work is complete"],
+		dependsOn: [],
+		relatedFiles: [],
+		status: "done",
+	}));
+	const mutation = createOrRevisePlan({
+		input: {
+			baseRevision: 0,
+			title: "Long plan",
+			objective: "Keep active history bounded",
+			reason: "Initial long plan",
+			steps,
+		},
+		requestId: "request-long",
+		request: "Long-running task",
+		now: "2026-01-02T00:00:00.000Z",
+		createId: () => "plan-long",
+	});
+	assert.equal(mutation.plan.steps.length, 5);
+	assert.equal(mutation.plan.archivedSteps.length, 16);
+	assert.equal(mutation.compactedSteps.length, 16);
+	assert.deepEqual(
+		mutation.plan.steps.map((step) => step.id),
+		["S17", "S18", "S19", "S20", "S21"],
+	);
+	assert.doesNotThrow(() => validatePlan(mutation.plan));
+});
+
+test("automatically compacts when progress crosses the terminal threshold", () => {
+	const steps: PlanStepInput[] = Array.from({ length: 21 }, (_, index) => ({
+		id: `S${String(index + 1).padStart(2, "0")}`,
+		phase: "History",
+		title: `Step ${index + 1}`,
+		shortTitle: `Step ${index + 1}`,
+		goal: "Advance the plan",
+		work: ["Perform the work"],
+		acceptance: ["The work is complete"],
+		dependsOn: index === 11 ? ["S01"] : [],
+		relatedFiles: [],
+		status: index < 10 ? "done" : index === 10 ? "in_progress" : "pending",
+	}));
+	const initial = createOrRevisePlan({
+		input: {
+			baseRevision: 0,
+			title: "Threshold plan",
+			objective: "Cross the terminal threshold through progress",
+			reason: "Initial plan",
+			steps,
+		},
+		requestId: "request-threshold",
+		request: "Threshold task",
+		now: "2026-01-02T00:00:00.000Z",
+		createId: () => "plan-threshold",
+	}).plan;
+	assert.equal(initial.archivedSteps.length, 0);
+
+	const mutation = applyPlanProgress(
+		initial,
+		{ baseRevision: initial.revision, done: "S11", note: "Complete S11" },
+		"2026-01-03T00:00:00.000Z",
+	);
+	assert.equal(mutation.plan.archivedSteps.length, 6);
+	assert.equal(mutation.plan.steps.length, 15);
+	assert.equal(mutation.plan.steps.find((step) => step.id === "S11")?.status, "done");
+	assert.equal(
+		buildPlanViews(mutation.plan).find((view) => view.step.id === "S12")?.status,
+		"ready",
+	);
+});
+
 test("revises a plan with stable ids and supersedes omitted steps", () => {
 	const inputs = stepInputs(TEST_PLAN).filter((step) => step.id !== "S15");
 	inputs.find((step) => step.id === "S05")!.title = "評価観点を更新する";
-	const revised = createOrRevisePlan({
+	const { plan: revised } = createOrRevisePlan({
 		current: TEST_PLAN,
 		input: {
 			baseRevision: 4,
@@ -201,7 +396,7 @@ test("revises a plan with stable ids and supersedes omitted steps", () => {
 });
 
 test("atomically completes the current step and starts a ready step", () => {
-	const revised = applyPlanProgress(
+	const { plan: revised } = applyPlanProgress(
 		TEST_PLAN,
 		{
 			baseRevision: 4,

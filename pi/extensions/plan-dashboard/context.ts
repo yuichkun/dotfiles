@@ -55,7 +55,7 @@ export function buildPlanContext(
 	if (!plan) return undefined;
 
 	const views = buildPlanViews(plan);
-	const summary = summarizePlan(views);
+	const summary = summarizePlan(views, plan.archivedSteps);
 	const current = views.find((view) => view.status === "in_progress");
 	const ready = views.filter((view) => view.status === "ready");
 	const level = getStalenessLevel(
@@ -65,7 +65,7 @@ export function buildPlanContext(
 	const lines = [
 		"<living-plan>",
 		`Plan ${plan.id} r${plan.revision}: ${plan.title}`,
-		`Progress: ${summary.done + summary.superseded}/${summary.total} resolved`,
+		`Progress: ${summary.done + summary.superseded}/${summary.total} resolved${summary.archived > 0 ? ` (${summary.archived} compacted)` : ""}`,
 		current
 			? `Current: ${current.step.id} — ${current.step.title}`
 			: ready[0]

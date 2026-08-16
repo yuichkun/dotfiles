@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { buildPlanContext, getStalenessLevel } from "./context.ts";
+import { createOrRevisePlan, type PlanStepInput } from "./plan.ts";
 import type { PlanRuntimeState } from "./state.ts";
 import { TEST_PLAN } from "./test-fixture.ts";
 
@@ -29,6 +30,40 @@ test("injects direct planning with optional consultation for an explicit request
 	assert.match(context ?? "", /genuinely difficult, ambiguous, or high-risk/);
 	assert.match(context ?? "", /optional advice, not an approval authority/);
 	assert.match(context ?? "", /Do not consult when the user asks you not to/);
+});
+
+test("reports automatically compacted progress in a fresh digest", () => {
+	const steps: PlanStepInput[] = Array.from({ length: 21 }, (_, index) => ({
+		id: `S${String(index + 1).padStart(2, "0")}`,
+		phase: "History",
+		title: `Step ${index + 1}`,
+		shortTitle: `Step ${index + 1}`,
+		goal: "Bound active history",
+		work: ["Perform the work"],
+		acceptance: ["The work is complete"],
+		dependsOn: [],
+		relatedFiles: [],
+		status: index < 11 ? "done" : "pending",
+	}));
+	const { plan } = createOrRevisePlan({
+		input: {
+			baseRevision: 0,
+			title: "Automatically compacted plan",
+			objective: "Keep compacted progress accurate",
+			reason: "Initial plan",
+			steps,
+		},
+		requestId: "request-context-compact",
+		request: "Compact context history",
+		now: "2026-01-02T00:00:00.000Z",
+		createId: () => "plan-context-compact",
+	});
+	const context = buildPlanContext({
+		plan,
+		workSinceUpdate: 0,
+		turnsSinceUpdate: 0,
+	}) ?? "";
+	assert.match(context, /Progress: 11\/21 resolved \(6 compacted\)/);
 });
 
 test("escalates a stale living-plan digest without creating an extra turn", () => {
