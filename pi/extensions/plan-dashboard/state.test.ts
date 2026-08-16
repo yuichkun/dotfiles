@@ -96,6 +96,34 @@ test("restores a branch-local request, consultation, and latest plan", () => {
 	assert.equal(runtime.getState().workSinceUpdate, 1);
 });
 
+test("migrates a schema-v1 snapshot while restoring branch state", () => {
+	const runtime = new PlanRuntime();
+	const { archivedSteps: _archivedSteps, ...legacy } = TEST_PLAN;
+	runtime.restore([
+		entry({
+			type: "message",
+			id: "1",
+			parentId: null,
+			timestamp: TEST_PLAN.createdAt,
+			message: {
+				role: "toolResult",
+				toolCallId: "set",
+				toolName: "plan",
+				content: [],
+				details: {
+					kind: "plan",
+					operation: "set",
+					plan: { ...legacy, schemaVersion: 1 },
+				},
+				isError: false,
+				timestamp: 1,
+			},
+		}),
+	]);
+	assert.equal(runtime.getPlan()?.schemaVersion, 2);
+	assert.deepEqual(runtime.getPlan()?.archivedSteps, []);
+});
+
 test("treats a request without a plan snapshot as pending", () => {
 	const runtime = new PlanRuntime();
 	runtime.restore([
@@ -114,7 +142,7 @@ test("treats a request without a plan snapshot as pending", () => {
 
 test("never displays an invalid latest snapshot as plausible progress", () => {
 	const runtime = new PlanRuntime();
-	const invalid = { ...TEST_PLAN, schemaVersion: 2 };
+	const invalid = { ...TEST_PLAN, schemaVersion: 99 };
 	runtime.restore([
 		entry({
 			type: "message",

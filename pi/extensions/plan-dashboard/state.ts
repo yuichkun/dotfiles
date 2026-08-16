@@ -1,5 +1,5 @@
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
-import { validatePlan, type Plan } from "./plan.ts";
+import { migratePlan, validatePlan, type Plan } from "./plan.ts";
 
 export const PLAN_REQUEST_ENTRY = "living-plan.request";
 export const PLAN_TOOL_NAME = "plan";
@@ -250,8 +250,7 @@ export class PlanRuntime {
 		}
 		if (details.kind === "inspection") return;
 		try {
-			validatePlan(details.plan);
-			this.state.plan = details.plan;
+			this.state.plan = migratePlan(details.plan);
 			this.state.workSinceUpdate = 0;
 			this.state.turnsSinceUpdate = 0;
 			this.state.error = undefined;

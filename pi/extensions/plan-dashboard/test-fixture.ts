@@ -26,7 +26,7 @@ function step(
 }
 
 export const TEST_PLAN: Plan = {
-	schemaVersion: 1,
+	schemaVersion: 2,
 	id: "plan-test",
 	requestId: "request-test",
 	request: "Living Planを実装する",
@@ -37,6 +37,7 @@ export const TEST_PLAN: Plan = {
 	changeReason: "UI test fixture",
 	createdAt: UPDATED_AT,
 	updatedAt: UPDATED_AT,
+	archivedSteps: [],
 	steps: [
 		step("S01", "要求を整理する", [], "done", "調査"),
 		step("S02", "Pi APIを調査する", [], "done", "調査"),

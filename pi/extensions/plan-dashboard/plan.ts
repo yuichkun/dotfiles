@@ -1,4 +1,5 @@
-export const PLAN_SCHEMA_VERSION = 1 as const;
+export const PLAN_SCHEMA_VERSION = 2 as const;
+const LEGACY_PLAN_SCHEMA_VERSION = 1 as const;
 export const MAX_PLAN_STEPS = 50;
 
 export type StoredStepStatus =
@@ -6,6 +7,11 @@ export type StoredStepStatus =
 	| "in_progress"
 	| "done"
 	| "superseded";
+
+export type TerminalStepStatus = Extract<
+	StoredStepStatus,
+	"done" | "superseded"
+>;
 
 export type DisplayStepStatus =
 	| "in_progress"
@@ -32,6 +38,17 @@ export interface PlanStep extends PlanStepInput {
 	updatedBy: "agent";
 }
 
+/**
+ * Minimal resolved-step tombstone kept in the current snapshot. Full step
+ * details remain recoverable from older tool results in the branch history.
+ */
+export interface ArchivedPlanStep {
+	id: string;
+	phase: string;
+	status: TerminalStepStatus;
+	compactedAt: string;
+}
+
 export interface Plan {
 	schemaVersion: typeof PLAN_SCHEMA_VERSION;
 	id: string;
@@ -45,6 +62,7 @@ export interface Plan {
 	createdAt: string;
 	updatedAt: string;
 	steps: readonly PlanStep[];
+	archivedSteps: readonly ArchivedPlanStep[];
 }
 
 export interface SetPlanInput {
@@ -83,6 +101,10 @@ export class PlanValidationError extends Error {
 		super(message);
 		this.name = "PlanValidationError";
 	}
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null;
 }
 
 function requireText(value: unknown, label: string): string {
@@ -153,11 +175,20 @@ function stepsEqual(left: PlanStep | PlanStepInput, right: PlanStepInput): boole
 	return JSON.stringify(comparableStep(left)) === JSON.stringify(right);
 }
 
+function isTerminalStatus(
+	status: StoredStepStatus,
+): status is TerminalStepStatus {
+	return status === "done" || status === "superseded";
+}
+
 export function dependencyIsResolved(step: PlanStep): boolean {
-	return step.status === "done" || step.status === "superseded";
+	return isTerminalStatus(step.status);
 }
 
 export function validatePlan(plan: Plan): void {
+	if (!isRecord(plan)) {
+		throw new PlanValidationError("plan must be an object");
+	}
 	if (plan.schemaVersion !== PLAN_SCHEMA_VERSION) {
 		throw new PlanValidationError(
 			`Unsupported plan schema version: ${String(plan.schemaVersion)}`,
@@ -188,15 +219,23 @@ export function validatePlan(plan: Plan): void {
 		throw new PlanValidationError("plan.revision must be a positive integer");
 	}
 	const rawSteps: unknown = plan.steps;
-	if (!Array.isArray(rawSteps) || rawSteps.length === 0) {
-		throw new PlanValidationError("A plan needs at least one step");
+	const rawArchivedSteps: unknown = plan.archivedSteps;
+	if (!Array.isArray(rawSteps)) {
+		throw new PlanValidationError("plan.steps must be an array");
+	}
+	if (!Array.isArray(rawArchivedSteps)) {
+		throw new PlanValidationError("plan.archivedSteps must be an array");
+	}
+	if (rawSteps.length === 0) {
+		throw new PlanValidationError("A plan needs at least one active step");
 	}
 	if (rawSteps.length > MAX_PLAN_STEPS) {
 		throw new PlanValidationError(
-			`A plan may contain at most ${MAX_PLAN_STEPS} steps`,
+			`A plan may contain at most ${MAX_PLAN_STEPS} active steps`,
 		);
 	}
 	const steps = rawSteps as readonly PlanStep[];
+	const archivedSteps = rawArchivedSteps as readonly ArchivedPlanStep[];
 
 	const validStatuses = new Set<StoredStepStatus>([
 		"pending",
@@ -206,6 +245,9 @@ export function validatePlan(plan: Plan): void {
 	]);
 	const stepsById = new Map<string, PlanStep>();
 	for (const step of steps) {
+		if (!isRecord(step)) {
+			throw new PlanValidationError("Every active step must be an object");
+		}
 		if (!/^[A-Za-z][A-Za-z0-9_-]{0,31}$/.test(step.id)) {
 			throw new PlanValidationError(`Invalid step id: ${String(step.id)}`);
 		}
@@ -247,12 +289,39 @@ export function validatePlan(plan: Plan): void {
 		stepsById.set(step.id, step);
 	}
 
+	const archivedById = new Map<string, ArchivedPlanStep>();
+	for (const archived of archivedSteps) {
+		if (!isRecord(archived)) {
+			throw new PlanValidationError("Every archived step must be an object");
+		}
+		if (!/^[A-Za-z][A-Za-z0-9_-]{0,31}$/.test(archived.id)) {
+			throw new PlanValidationError(
+				`Invalid archived step id: ${String(archived.id)}`,
+			);
+		}
+		requireText(archived.phase, `${archived.id}.phase`);
+		if (!isTerminalStatus(archived.status)) {
+			throw new PlanValidationError(
+				`Archived step ${archived.id} must be done or superseded`,
+			);
+		}
+		if (!isIsoTimestamp(archived.compactedAt)) {
+			throw new PlanValidationError(
+				`${archived.id}.compactedAt must be an ISO timestamp`,
+			);
+		}
+		if (stepsById.has(archived.id) || archivedById.has(archived.id)) {
+			throw new PlanValidationError(`Duplicate step id: ${archived.id}`);
+		}
+		archivedById.set(archived.id, archived);
+	}
+
 	for (const step of steps) {
 		for (const dependencyId of step.dependsOn) {
 			if (dependencyId === step.id) {
 				throw new PlanValidationError(`${step.id} depends on itself`);
 			}
-			if (!stepsById.has(dependencyId)) {
+			if (!stepsById.has(dependencyId) && !archivedById.has(dependencyId)) {
 				throw new PlanValidationError(
 					`${step.id} depends on missing step ${dependencyId}`,
 				);
@@ -263,7 +332,7 @@ export function validatePlan(plan: Plan): void {
 	const visiting = new Set<string>();
 	const visited = new Set<string>();
 	const visit = (stepId: string): void => {
-		if (visited.has(stepId)) return;
+		if (visited.has(stepId) || archivedById.has(stepId)) return;
 		if (visiting.has(stepId)) {
 			throw new PlanValidationError(`Dependency cycle includes ${stepId}`);
 		}
@@ -286,6 +355,7 @@ export function validatePlan(plan: Plan): void {
 	for (const step of steps) {
 		if (step.status !== "done" && step.status !== "in_progress") continue;
 		const unresolved = step.dependsOn.filter((dependencyId) => {
+			if (archivedById.has(dependencyId)) return false;
 			const dependency = stepsById.get(dependencyId);
 			return dependency !== undefined && !dependencyIsResolved(dependency);
 		});
@@ -295,6 +365,31 @@ export function validatePlan(plan: Plan): void {
 			);
 		}
 	}
+}
+
+/** Convert a persisted schema-v1 snapshot to v2 without losing active steps. */
+export function migratePlan(value: unknown): Plan {
+	if (!isRecord(value)) {
+		throw new PlanValidationError("plan must be an object");
+	}
+	const schemaVersion = value.schemaVersion;
+	if (schemaVersion === PLAN_SCHEMA_VERSION) {
+		const plan = value as unknown as Plan;
+		validatePlan(plan);
+		return plan;
+	}
+	if (schemaVersion !== LEGACY_PLAN_SCHEMA_VERSION) {
+		throw new PlanValidationError(
+			`Unsupported plan schema version: ${String(schemaVersion)}`,
+		);
+	}
+	const migrated = {
+		...value,
+		schemaVersion: PLAN_SCHEMA_VERSION,
+		archivedSteps: [],
+	} as unknown as Plan;
+	validatePlan(migrated);
+	return migrated;
 }
 
 export function createOrRevisePlan(options: {
@@ -317,6 +412,9 @@ export function createOrRevisePlan(options: {
 	const previousById = new Map(
 		(current?.steps ?? []).map((step) => [step.id, step]),
 	);
+	const archivedIds = new Set(
+		(current?.archivedSteps ?? []).map((step) => step.id),
+	);
 	const incoming = input.steps.map(normalizeStep);
 	const incomingIds = new Set<string>();
 	const steps: PlanStep[] = [];
@@ -324,6 +422,11 @@ export function createOrRevisePlan(options: {
 	for (const step of incoming) {
 		if (incomingIds.has(step.id)) {
 			throw new PlanValidationError(`Duplicate step id: ${step.id}`);
+		}
+		if (archivedIds.has(step.id)) {
+			throw new PlanValidationError(
+				`Archived step id cannot be reused: ${step.id}`,
+			);
 		}
 		incomingIds.add(step.id);
 		const previous = previousById.get(step.id);
@@ -359,6 +462,7 @@ export function createOrRevisePlan(options: {
 		createdAt: current?.createdAt ?? now,
 		updatedAt: now,
 		steps,
+		archivedSteps: current?.archivedSteps ?? [],
 	};
 	validatePlan(plan);
 	return plan;
@@ -383,6 +487,7 @@ export function applyPlanProgress(
 
 	const steps = current.steps.map((step) => ({ ...step }));
 	const stepsById = new Map(steps.map((step) => [step.id, step]));
+	const archivedIds = new Set(current.archivedSteps.map((step) => step.id));
 
 	if (input.done) {
 		const step = stepsById.get(input.done);
@@ -411,6 +516,7 @@ export function applyPlanProgress(
 			);
 		}
 		const unresolved = step.dependsOn.filter((dependencyId) => {
+			if (archivedIds.has(dependencyId)) return false;
 			const dependency = stepsById.get(dependencyId);
 			return dependency !== undefined && !dependencyIsResolved(dependency);
 		});
@@ -436,6 +542,9 @@ export function applyPlanProgress(
 
 export function buildPlanViews(plan: Plan): PlanStepView[] {
 	const stepsById = new Map(plan.steps.map((step) => [step.id, step]));
+	const archivedById = new Map(
+		plan.archivedSteps.map((step) => [step.id, step]),
+	);
 	const dependentsById = new Map<string, PlanStep[]>();
 
 	for (const step of plan.steps) {
@@ -448,6 +557,7 @@ export function buildPlanViews(plan: Plan): PlanStepView[] {
 
 	return plan.steps.map((step) => {
 		const blockers = step.dependsOn
+			.filter((id) => !archivedById.has(id))
 			.map((id) => stepsById.get(id))
 			.filter(
 				(dependency): dependency is PlanStep =>

@@ -4,6 +4,7 @@ import {
 	applyPlanProgress,
 	buildPlanViews,
 	createOrRevisePlan,
+	migratePlan,
 	PlanValidationError,
 	summarizePlan,
 	validatePlan,
@@ -56,6 +57,115 @@ test("rejects malformed status, missing dependencies, and cycles", () => {
 	const cyclic = structuredClone(TEST_PLAN);
 	cyclic.steps[0]!.dependsOn = ["S15"];
 	assert.throws(() => validatePlan(cyclic), /Dependency cycle/);
+});
+
+test("migrates a schema-v1 snapshot without losing active steps", () => {
+	const { archivedSteps: _archivedSteps, ...legacy } = TEST_PLAN;
+	const migrated = migratePlan({ ...legacy, schemaVersion: 1 });
+	assert.equal(migrated.schemaVersion, 2);
+	assert.equal(migrated.steps.length, TEST_PLAN.steps.length);
+	assert.deepEqual(migrated.archivedSteps, []);
+});
+
+test("rejects malformed persisted plan records with validation errors", () => {
+	for (const value of [
+		null,
+		{ ...TEST_PLAN, steps: "not-an-array" },
+		{ ...TEST_PLAN, archivedSteps: "not-an-array" },
+		{ ...TEST_PLAN, steps: [null] },
+		{ ...TEST_PLAN, archivedSteps: [null] },
+	]) {
+		assert.throws(
+			() => migratePlan(value),
+			(error: unknown) => error instanceof PlanValidationError,
+		);
+	}
+});
+
+test("validates archived dependencies and reserves their step ids", () => {
+	const plan = structuredClone(TEST_PLAN);
+	const archived = plan.steps.find((step) => step.id === "S01")!;
+	plan.steps = plan.steps.filter((step) => step.id !== archived.id);
+	plan.archivedSteps = [
+		{
+			id: archived.id,
+			phase: archived.phase,
+			status: "done",
+			compactedAt: "2026-01-02T00:00:00.000Z",
+		},
+	];
+
+	assert.doesNotThrow(() => validatePlan(plan));
+	assert.ok(
+		plan.steps.find((step) => step.id === "S04")?.dependsOn.includes(archived.id),
+	);
+	assert.deepEqual(
+		buildPlanViews(plan).find((view) => view.step.id === "S04")?.blockers,
+		[],
+	);
+
+	assert.throws(
+		() =>
+			createOrRevisePlan({
+				current: plan,
+				input: {
+					baseRevision: plan.revision,
+					title: plan.title,
+					objective: plan.objective,
+					reason: "Attempt archived id reuse",
+					steps: [...stepInputs(plan), stepInputs(TEST_PLAN)[0]!],
+				},
+				requestId: plan.requestId,
+				request: plan.request,
+				now: "2026-01-03T00:00:00.000Z",
+				createId: () => "unused",
+			}),
+		/Archived step id cannot be reused: S01/,
+	);
+});
+
+test("rejects snapshots without an active step", () => {
+	const archivedOnly = structuredClone(TEST_PLAN);
+	archivedOnly.steps = [];
+	archivedOnly.archivedSteps = [
+		{
+			id: "S16",
+			phase: "Archive",
+			status: "done",
+			compactedAt: "2026-01-02T00:00:00.000Z",
+		},
+	];
+	assert.throws(() => validatePlan(archivedOnly), /at least one active step/);
+	assert.throws(
+		() => validatePlan({ ...archivedOnly, archivedSteps: [] }),
+		/at least one active step/,
+	);
+});
+
+test("rejects malformed archived tombstones", () => {
+	const malformed = structuredClone(TEST_PLAN);
+	malformed.archivedSteps = [
+		{
+			id: "S16",
+			phase: "Archive",
+			status: "pending" as never,
+			compactedAt: "2026-01-02T00:00:00.000Z",
+		},
+	];
+	assert.throws(() => validatePlan(malformed), /must be done or superseded/);
+
+	malformed.archivedSteps[0]!.status = "done";
+	malformed.archivedSteps[0]!.compactedAt = "not-a-timestamp";
+	assert.throws(() => validatePlan(malformed), /must be an ISO timestamp/);
+
+	malformed.archivedSteps = [
+		{
+			...malformed.archivedSteps[0]!,
+			id: TEST_PLAN.steps[0]!.id,
+			compactedAt: "2026-01-02T00:00:00.000Z",
+		},
+	];
+	assert.throws(() => validatePlan(malformed), /Duplicate step id: S01/);
 });
 
 test("revises a plan with stable ids and supersedes omitted steps", () => {
