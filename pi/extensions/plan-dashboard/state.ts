@@ -41,7 +41,7 @@ export interface ConsultationToolDetails {
 
 export interface PlanSnapshotToolDetails {
 	kind: "plan";
-	operation: "set" | "progress";
+	operation: "set" | "progress" | "compact";
 	plan: Plan;
 	compactedSteps?: readonly PlanStep[];
 }
@@ -128,7 +128,9 @@ export function isPlanToolDetails(value: unknown): value is PlanToolDetails {
 	if (value.kind === "inspection") return isRecord(value.plan);
 	return (
 		value.kind === "plan" &&
-		(value.operation === "set" || value.operation === "progress") &&
+		(value.operation === "set" ||
+			value.operation === "progress" ||
+			value.operation === "compact") &&
 		isRecord(value.plan) &&
 		(value.compactedSteps === undefined || Array.isArray(value.compactedSteps))
 	);
@@ -210,13 +212,20 @@ export class PlanRuntime {
 		this.consultations.set(consultation.id, consultation);
 	}
 
-	applyPlan(plan: Plan): void {
+	applyPlan(
+		plan: Plan,
+		options: { preserveStaleness?: boolean } = {},
+	): void {
 		validatePlan(plan);
 		this.state = {
 			...this.state,
 			plan,
-			workSinceUpdate: 0,
-			turnsSinceUpdate: 0,
+			workSinceUpdate: options.preserveStaleness
+				? this.state.workSinceUpdate
+				: 0,
+			turnsSinceUpdate: options.preserveStaleness
+				? this.state.turnsSinceUpdate
+				: 0,
 			error: undefined,
 		};
 		this.emit();
@@ -258,8 +267,10 @@ export class PlanRuntime {
 		if (details.kind === "inspection") return;
 		try {
 			this.state.plan = migratePlan(details.plan);
-			this.state.workSinceUpdate = 0;
-			this.state.turnsSinceUpdate = 0;
+			if (details.operation !== "compact") {
+				this.state.workSinceUpdate = 0;
+				this.state.turnsSinceUpdate = 0;
+			}
 			this.state.error = undefined;
 		} catch (error) {
 			this.state.plan = undefined;

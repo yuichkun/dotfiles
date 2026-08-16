@@ -51,6 +51,7 @@ Ready: S05, S06
 - `consult`: 難しい、曖昧、高リスクなplanningで独立した助言が役立つ場合だけFableへ相談する（optional）
 - `set`: active Plan全体を作成・改訂する。省略した既存Stepは`superseded`になる
 - `progress`: 現在Stepの完了とReady Stepの開始をatomicに更新する
+- `compact`: done / superseded Stepをarchiveする
 
 Step境界では`progress`、前提、Step、順序、依存関係が変わった場合は`set`を使う。通常の更新ではユーザー確認を待たない。要求済み成果物の削除・延期、完了条件の緩和、ユーザーの明示決定との矛盾、完了済み作業の巻き戻しだけは先に確認する。
 
@@ -69,7 +70,7 @@ Plan schema v2は、実行対象の`steps`と、解決済みIDを保持する`ar
 
 `archivedSteps`は依存解決とID再利用防止の履歴なので件数上限を設けず、各Stepを4 fieldのtombstoneへ縮小して保持する。
 
-`set` / `progress`後にactive Stepが20件を超え、terminal Stepが10件を超えた場合は、直近5件を残して同じrevision更新内で自動compactする。active 50件制限を超えるrevisionでは、overflowに応じてretention件数を5件未満へ縮めて制限内へ戻し、それでも超過が残る場合はrevisionを拒否する。これによりsuperseded Stepの単調増加で不正なsnapshotが保存されることを防ぐ。
+手動`compact`はterminal Stepをすべてarchiveする。`set` / `progress`後にactive Stepが20件を超え、terminal Stepが10件を超えた場合は、直近5件を残して同じrevision更新内で自動compactする。active 50件制限を超えるrevisionでは、overflowに応じてretention件数を5件未満へ縮めて制限内へ戻し、それでも超過が残る場合はrevisionを拒否する。これによりsuperseded Stepの単調増加で不正なsnapshotが保存されることを防ぐ。
 
 これはPiのSession `/compact`とは独立した、Plan artifact専用のcompactionである。
 
@@ -109,7 +110,7 @@ Plan作成要求はCustom Entry、Fable consultationとPlan snapshotは`plan` To
 - 循環依存と自己依存は禁止
 - `in_progress`は最大1件
 - unresolvedな依存を持つStepは開始・完了できない
-- 古い`baseRevision`からの更新は禁止
+- 古い`baseRevision`からの更新・compactは禁止
 - Plan改訂で省略されたactive Stepはまず`superseded`になる
 - `progress`では`in_progress`のStepだけを完了できる
 - archiveできるのは`done` / `superseded`だけ

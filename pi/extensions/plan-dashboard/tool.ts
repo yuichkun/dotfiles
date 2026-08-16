@@ -7,8 +7,10 @@ import { consultFable } from "./advisor.ts";
 import {
 	applyPlanProgress,
 	buildPlanViews,
+	compactPlan,
 	createOrRevisePlan,
 	summarizePlan,
+	type CompactPlanInput,
 	type PlanStepInput,
 	type ProgressPlanInput,
 	type SetPlanInput,
@@ -100,6 +102,14 @@ const PlanToolParameters = Type.Union([
 		},
 		{ additionalProperties: false },
 	),
+	Type.Object(
+		{
+			op: Type.Literal("compact"),
+			baseRevision: Type.Integer({ minimum: 1 }),
+			note: NonEmptyString,
+		},
+		{ additionalProperties: false },
+	),
 ]);
 
 function normalizeRequired(value: string, label: string): string {
@@ -151,14 +161,14 @@ export function registerPlanTool(
 		name: PLAN_TOOL_NAME,
 		label: "Plan",
 		description:
-			"Create and maintain the living plan explicitly requested with /plan. Do not create a plan unless a /plan request is pending. Consultation is optional: use consult only for genuinely difficult, ambiguous, or high-risk planning where independent Fable advice materially helps; never treat it as an approval gate. get returns the complete current snapshot; set creates or fully replaces the active structure (omitted existing steps become superseded); progress atomically completes the current step and/or starts a ready step. Large mutations may automatically compact resolved active steps while retaining dependency tombstones. Archived step IDs must not be reintroduced by set; use get after automatic compaction when the active snapshot is unclear.",
+			"Create and maintain the living plan explicitly requested with /plan. Do not create a plan unless a /plan request is pending. Consultation is optional: use consult only for genuinely difficult, ambiguous, or high-risk planning where independent Fable advice materially helps; never treat it as an approval gate. get returns the complete current snapshot; set creates or fully replaces the active structure (omitted existing steps become superseded); progress atomically completes the current step and/or starts a ready step; compact archives every resolved active step while retaining dependency tombstones. Large mutations may also compact automatically. Archived step IDs must not be reintroduced by set; use get after compaction when the active snapshot is unclear.",
 		promptSnippet:
 			"Create and update an explicitly requested living plan",
 		promptGuidelines: [
 			"Use plan only when a /plan workflow is pending or a living plan already exists; never create a plan automatically for an ordinary session.",
 			"Fable consultation is optional. Use consult only for genuinely difficult, ambiguous, or high-risk planning; do not consult for routine work or when the user asks you not to.",
 			"When a living plan exists, use plan at step boundaries and revise it proactively when reality changes instead of waiting for the user to ask.",
-			"After automatic plan compaction, never include archived step IDs in a later plan set operation; use plan get first when the active snapshot is unclear.",
+			"After plan compaction, never include archived step IDs in a later plan set operation; use plan get first when the active snapshot is unclear.",
 			"Before changing a living plan in a way that removes or defers a requested deliverable, relaxes acceptance criteria, contradicts a user decision, or rolls back completed work, ask the user; routine implementation and dependency changes do not need confirmation.",
 		],
 		parameters: PlanToolParameters,
@@ -309,6 +319,36 @@ export function registerPlanTool(
 							...(mutation.compactedSteps.length > 0
 								? { compactedSteps: mutation.compactedSteps }
 								: {}),
+						},
+					};
+				}
+				case "compact": {
+					const current = runtime.getPlan();
+					if (!current) {
+						throw new Error("No living plan exists on the current session branch");
+					}
+					const input: CompactPlanInput = {
+						baseRevision: params.baseRevision,
+						note: params.note,
+					};
+					const mutation = compactPlan(
+						current,
+						input,
+						new Date().toISOString(),
+					);
+					runtime.applyPlan(mutation.plan, { preserveStaleness: true });
+					return {
+						content: [
+							{
+								type: "text",
+								text: compactPlanResult(mutation.plan, mutation.compactedSteps),
+							},
+						],
+						details: {
+							kind: "plan",
+							operation: "compact",
+							plan: mutation.plan,
+							compactedSteps: mutation.compactedSteps,
 						},
 					};
 				}

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { buildPlanContext, getStalenessLevel } from "./context.ts";
-import { createOrRevisePlan, type PlanStepInput } from "./plan.ts";
+import { compactPlan, createOrRevisePlan, type PlanStepInput } from "./plan.ts";
 import type { PlanRuntimeState } from "./state.ts";
 import { TEST_PLAN } from "./test-fixture.ts";
 
@@ -64,6 +64,26 @@ test("reports automatically compacted progress in a fresh digest", () => {
 		turnsSinceUpdate: 0,
 	}) ?? "";
 	assert.match(context, /Progress: 11\/21 resolved \(6 compacted\)/);
+});
+
+test("reports a manually compacted completed plan", () => {
+	const completed = {
+		...TEST_PLAN,
+		steps: TEST_PLAN.steps.map((step) => ({ ...step, status: "done" as const })),
+	};
+	const plan = compactPlan(
+		completed,
+		{ baseRevision: completed.revision, note: "Archive completed plan" },
+		"2026-01-02T00:00:00.000Z",
+	).plan;
+	const context = buildPlanContext({
+		plan,
+		workSinceUpdate: 0,
+		turnsSinceUpdate: 0,
+	}) ?? "";
+	assert.match(context, /Progress: 15\/15 resolved \(15 compacted\)/);
+	assert.match(context, /Current: complete/);
+	assert.match(context, /Ready: none/);
 });
 
 test("escalates a stale living-plan digest without creating an extra turn", () => {

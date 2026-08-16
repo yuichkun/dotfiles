@@ -529,7 +529,10 @@ export class PlanDashboardComponent extends BaseModal<void> {
 			this.requestRender();
 			return;
 		}
-		if (this.keybindings.matches(data, "tui.select.confirm")) {
+		if (
+			this.keybindings.matches(data, "tui.select.confirm") &&
+			this.getSelectedView()
+		) {
 			this.detailOpen = true;
 			this.detailScroll = 0;
 			this.requestRender();

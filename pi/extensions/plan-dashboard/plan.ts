@@ -84,6 +84,11 @@ export interface ProgressPlanInput {
 	note: string;
 }
 
+export interface CompactPlanInput {
+	baseRevision: number;
+	note: string;
+}
+
 export interface PlanMutationResult {
 	plan: Plan;
 	compactedSteps: readonly PlanStep[];
@@ -241,8 +246,8 @@ function validatePlanInternal(
 	if (!Array.isArray(rawArchivedSteps)) {
 		throw new PlanValidationError("plan.archivedSteps must be an array");
 	}
-	if (rawSteps.length === 0) {
-		throw new PlanValidationError("A plan needs at least one active step");
+	if (rawSteps.length === 0 && rawArchivedSteps.length === 0) {
+		throw new PlanValidationError("A plan needs at least one active or archived step");
 	}
 	if (
 		rawSteps.length > MAX_PLAN_STEPS &&
@@ -634,6 +639,34 @@ export function applyPlanProgress(
 		steps,
 	};
 	return autoCompact(plan, now);
+}
+
+export function compactPlan(
+	current: Plan,
+	input: CompactPlanInput,
+	now: string,
+): PlanMutationResult {
+	if (input.baseRevision !== current.revision) {
+		throw new PlanValidationError(
+			`Stale plan revision: expected ${current.revision}, received ${input.baseRevision}`,
+		);
+	}
+	validatePlan(current);
+	const compactIds = new Set(
+		current.steps
+			.filter((step) => isTerminalStatus(step.status))
+			.map((step) => step.id),
+	);
+	if (compactIds.size === 0) {
+		throw new PlanValidationError("No done or superseded steps are available to compact");
+	}
+	const base: Plan = {
+		...current,
+		revision: current.revision + 1,
+		changeReason: requireText(input.note, "note"),
+		updatedAt: now,
+	};
+	return archiveSteps(base, compactIds, now);
 }
 
 export function buildPlanViews(plan: Plan): PlanStepView[] {

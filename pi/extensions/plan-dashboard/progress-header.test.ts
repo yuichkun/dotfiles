@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";
+import { compactPlan } from "./plan.ts";
 import { PlanProgressHeader } from "./progress-header.ts";
 import { TEST_PLAN } from "./test-fixture.ts";
 
@@ -102,6 +103,23 @@ test("uses warning only for severe staleness", () => {
 	assert.match(mild, /<muted> · ⚠ STALE/);
 	assert.doesNotMatch(mild, /<warning>/);
 	assert.match(severe, /<warning> · ⚠ STALE/);
+});
+
+test("renders a completed header when every active step is compacted", () => {
+	const completed = {
+		...TEST_PLAN,
+		steps: TEST_PLAN.steps.map((step) => ({ ...step, status: "done" as const })),
+	};
+	const { plan } = compactPlan(
+		completed,
+		{ baseRevision: completed.revision, note: "Archive completed plan" },
+		"2026-01-02T00:00:00.000Z",
+	);
+	const output = new PlanProgressHeader(
+		{ plan, workSinceUpdate: 0, turnsSinceUpdate: 0 },
+		theme,
+	).render(120).join("\n");
+	assert.match(output, /PLAN COMPLETE/);
 });
 
 test("keeps unbounded compacted totals width-safe", () => {

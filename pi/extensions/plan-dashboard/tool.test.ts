@@ -3,8 +3,10 @@ import test from "node:test";
 import type {
 	ExtensionAPI,
 	ExtensionContext,
+	SessionEntry,
 	Theme,
 } from "@earendil-works/pi-coding-agent";
+import { compactPlan } from "./plan.ts";
 import { PlanRuntime, type PlanToolDetails } from "./state.ts";
 import { TEST_PLAN } from "./test-fixture.ts";
 import { registerPlanTool } from "./tool.ts";
@@ -267,6 +269,98 @@ test("returns full details for steps compacted automatically by set", async () =
 	);
 	assert.match(inspection.content[0]?.text ?? "", /"archivedSteps"/);
 	assert.match(inspection.content[0]?.text ?? "", /"id": "S01"/);
+});
+
+test("compacts resolved steps without clearing staleness", async () => {
+	const { runtime, tool } = setup();
+	runtime.applyPlan(TEST_PLAN);
+	runtime.recordToolResult("edit", false);
+	runtime.recordTurn();
+	const result = await tool.execute(
+		"compact",
+		{
+			op: "compact",
+			baseRevision: TEST_PLAN.revision,
+			note: "Archive resolved history",
+		},
+		undefined,
+		undefined,
+		context,
+	);
+	assert.equal(result.details.kind, "plan");
+	if (result.details.kind === "plan") {
+		assert.equal(result.details.operation, "compact");
+		assert.deepEqual(
+			result.details.compactedSteps,
+			TEST_PLAN.steps.filter((step) =>
+				step.status === "done" || step.status === "superseded"
+			),
+		);
+		assert.equal(result.details.plan.archivedSteps.length, 3);
+	}
+	assert.equal(runtime.getState().workSinceUpdate, 1);
+	assert.equal(runtime.getState().turnsSinceUpdate, 1);
+	assert.match(result.content[0]?.text ?? "", /Active: 12; compacted: 3/);
+	assert.match(result.content[0]?.text ?? "", /Compacted now: S01, S02, S03/);
+
+	const theme = {
+		fg: (color: string, text: string) => `<${color}>${text}</${color}>`,
+		bold: (text: string) => text,
+	} as unknown as Theme;
+	const renderedCall = tool
+		.renderCall({ op: "compact" }, theme)
+		.render(120)
+		.join("\n")
+		.trimEnd();
+	assert.equal(renderedCall, "<text>plan</text> <muted>compact</muted>");
+	const rendered = tool
+		.renderResult(result, { expanded: false, isPartial: false }, theme)
+		.render(120)
+		.join("\n")
+		.trimEnd();
+	assert.equal(rendered, "<text>● Plan r5 · compact</text>");
+});
+
+test("restores compact snapshots without clearing prior staleness", () => {
+	const runtime = new PlanRuntime();
+	const compacted = compactPlan(
+		TEST_PLAN,
+		{ baseRevision: TEST_PLAN.revision, note: "Archive resolved history" },
+		"2026-01-02T00:00:00.000Z",
+	).plan;
+	const entry = (value: object): SessionEntry => value as SessionEntry;
+	runtime.restore([
+		entry({
+			type: "message",
+			message: {
+				role: "toolResult",
+				toolName: "plan",
+				details: { kind: "plan", operation: "set", plan: TEST_PLAN },
+				isError: false,
+			},
+		}),
+		entry({
+			type: "message",
+			message: {
+				role: "toolResult",
+				toolName: "edit",
+				isError: false,
+			},
+		}),
+		entry({ type: "message", message: { role: "assistant" } }),
+		entry({
+			type: "message",
+			message: {
+				role: "toolResult",
+				toolName: "plan",
+				details: { kind: "plan", operation: "compact", plan: compacted },
+				isError: false,
+			},
+		}),
+	]);
+	assert.equal(runtime.getPlan()?.revision, compacted.revision);
+	assert.equal(runtime.getState().workSinceUpdate, 1);
+	assert.equal(runtime.getState().turnsSinceUpdate, 1);
 });
 
 test("rejects an explicitly supplied unknown consultation", async () => {

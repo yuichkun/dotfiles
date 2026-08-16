@@ -3,6 +3,7 @@ import test from "node:test";
 import {
 	applyPlanProgress,
 	buildPlanViews,
+	compactPlan,
 	createOrRevisePlan,
 	migratePlan,
 	PlanValidationError,
@@ -126,7 +127,7 @@ test("validates archived dependencies and reserves their step ids", () => {
 	);
 });
 
-test("rejects snapshots without an active step", () => {
+test("accepts archive-only snapshots and rejects fully empty plans", () => {
 	const archivedOnly = structuredClone(TEST_PLAN);
 	archivedOnly.steps = [];
 	archivedOnly.archivedSteps = [
@@ -137,10 +138,10 @@ test("rejects snapshots without an active step", () => {
 			compactedAt: "2026-01-02T00:00:00.000Z",
 		},
 	];
-	assert.throws(() => validatePlan(archivedOnly), /at least one active step/);
+	assert.doesNotThrow(() => validatePlan(archivedOnly));
 	assert.throws(
 		() => validatePlan({ ...archivedOnly, archivedSteps: [] }),
-		/at least one active step/,
+		/at least one active or archived step/,
 	);
 });
 
@@ -168,6 +169,90 @@ test("rejects malformed archived tombstones", () => {
 		},
 	];
 	assert.throws(() => validatePlan(malformed), /Duplicate step id: S01/);
+});
+
+test("compacts terminal steps into resolved tombstones", () => {
+	const { plan, compactedSteps } = compactPlan(
+		TEST_PLAN,
+		{ baseRevision: TEST_PLAN.revision, note: "Archive resolved history" },
+		"2026-01-02T00:00:00.000Z",
+	);
+	assert.deepEqual(compactedSteps.map((step) => step.id), ["S01", "S02", "S03"]);
+	assert.equal(plan.revision, TEST_PLAN.revision + 1);
+	assert.equal(plan.archivedSteps.length, 3);
+	assert.equal(plan.steps.find((step) => step.id === "S04")?.status, "in_progress");
+	assert.doesNotThrow(() => validatePlan(plan));
+	assert.deepEqual(
+		buildPlanViews(plan).find((view) => view.step.id === "S04")?.blockers,
+		[],
+	);
+});
+
+test("rejects stale or empty manual compaction", () => {
+	assert.throws(
+		() =>
+			compactPlan(
+				TEST_PLAN,
+				{ baseRevision: TEST_PLAN.revision - 1, note: "Stale archive" },
+				"2026-01-02T00:00:00.000Z",
+			),
+		/expected 4, received 3/,
+	);
+	const unresolved = {
+		...TEST_PLAN,
+		steps: TEST_PLAN.steps.map((step) => ({
+			...step,
+			status: "pending" as const,
+		})),
+	};
+	assert.throws(
+		() =>
+			compactPlan(
+				unresolved,
+				{ baseRevision: unresolved.revision, note: "Nothing to archive" },
+				"2026-01-02T00:00:00.000Z",
+			),
+		/No done or superseded steps/,
+	);
+
+	const malformed = structuredClone(TEST_PLAN);
+	malformed.steps[0]!.dependsOn = [malformed.steps[0]!.id];
+	assert.throws(
+		() =>
+			compactPlan(
+				malformed,
+				{ baseRevision: malformed.revision, note: "Invalid archive" },
+				"2026-01-02T00:00:00.000Z",
+			),
+		/depends on itself/,
+	);
+});
+
+test("preserves archived dependencies across progress mutations", () => {
+	const compacted = compactPlan(
+		TEST_PLAN,
+		{ baseRevision: TEST_PLAN.revision, note: "Archive resolved history" },
+		"2026-01-02T00:00:00.000Z",
+	).plan;
+	const archivedIds = new Set(compacted.archivedSteps.map((step) => step.id));
+	assert.ok(
+		compacted.steps
+			.find((step) => step.id === "S05")
+			?.dependsOn.some((id) => archivedIds.has(id)),
+	);
+	const { plan } = applyPlanProgress(
+		compacted,
+		{
+			baseRevision: compacted.revision,
+			done: "S04",
+			start: "S05",
+			note: "Advance after compaction",
+		},
+		"2026-01-03T00:00:00.000Z",
+	);
+	assert.equal(plan.archivedSteps.length, 3);
+	assert.equal(plan.steps.find((step) => step.id === "S05")?.status, "in_progress");
+	assert.doesNotThrow(() => validatePlan(plan));
 });
 
 test("rejects malformed terminal steps before automatic compaction removes their details", () => {

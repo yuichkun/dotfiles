@@ -8,7 +8,7 @@ import type { TUI } from "@earendil-works/pi-tui";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import type { ModalContext } from "../shared/modal.ts";
 import { PlanDashboardComponent } from "./dashboard.ts";
-import { createOrRevisePlan, type PlanStepInput } from "./plan.ts";
+import { compactPlan, createOrRevisePlan, type PlanStepInput } from "./plan.ts";
 import { TEST_PLAN } from "./test-fixture.ts";
 
 const keyByAction: Record<string, string> = {
@@ -221,6 +221,72 @@ test("keeps automatically compacted progress visible", () => {
 	const detail = interactive.render(120).join("\n");
 	assert.match(detail, /Plan Step · S12/);
 	assert.match(detail, /← S01/);
+});
+
+test("keeps manually compacted progress visible without requiring active history", () => {
+	const { plan } = compactPlan(
+		TEST_PLAN,
+		{ baseRevision: TEST_PLAN.revision, note: "Archive resolved history" },
+		"2026-01-02T00:00:00.000Z",
+	);
+	for (const width of [48, 80, 100, 140]) {
+		const lines = createComponent(
+			40,
+			{ workSinceUpdate: 0, turnsSinceUpdate: 0 },
+			undefined,
+			plan,
+		).render(width);
+		assertWidthSafe(lines, width);
+		if (width === 140) {
+			assert.match(lines.join("\n"), /3\/15/);
+			assert.match(lines.join("\n"), /compacted 3/);
+		}
+	}
+
+	const completed = {
+		...TEST_PLAN,
+		steps: TEST_PLAN.steps.map((step) => ({ ...step, status: "done" as const })),
+	};
+	const archivedOnly = compactPlan(
+		completed,
+		{ baseRevision: completed.revision, note: "Archive completed plan" },
+		"2026-01-02T00:00:00.000Z",
+	).plan;
+	for (const width of [48, 80, 100, 120, 140]) {
+		const emptyOutput = createComponent(
+			30,
+			{ workSinceUpdate: 0, turnsSinceUpdate: 0 },
+			undefined,
+			archivedOnly,
+		).render(width);
+		assertWidthSafe(emptyOutput, width);
+		assert.match(emptyOutput.join("\n"), /15\/15/);
+		if (width >= 80) {
+			assert.match(emptyOutput.join("\n"), /compacted 15/);
+		}
+	}
+	const emptyComponent = createComponent(
+		30,
+		{ workSinceUpdate: 0, turnsSinceUpdate: 0 },
+		undefined,
+		archivedOnly,
+	);
+	for (const input of [
+		keyByAction["tui.select.up"]!,
+		keyByAction["tui.select.down"]!,
+		"\u001b[D",
+		"\u001b[C",
+		"\t",
+		"d",
+		"0",
+	]) {
+		emptyComponent.handleInput(input);
+		assertWidthSafe(emptyComponent.render(120), 120);
+	}
+	emptyComponent.handleInput(keyByAction["tui.select.confirm"]!);
+	const afterEnter = emptyComponent.render(120).join("\n");
+	assert.match(afterEnter, /Plan Dashboard/);
+	assert.doesNotMatch(afterEnter, /Plan Step/);
 });
 
 test("dependency trace keeps the full map and marks trace mode", () => {
