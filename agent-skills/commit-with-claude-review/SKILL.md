@@ -2,8 +2,9 @@
 name: commit-with-claude-review
 description: >-
   Creates small, coherent Git commits through a review-first approval workflow:
-  stage one atomic change at a time; validate it; normally run blind correctness
-  and minimality reviews; fingerprint the exact state; and require user approval.
+  challenge commit boundaries before staging; stage one atomic change at a time;
+  validate it; normally run blind correctness and minimality reviews that also
+  audit commit size; fingerprint the exact state; and require user approval.
   Also supports an explicit user-authorized emergency bypass when external
   reviewers are unavailable or urgency outweighs review latency. Use whenever
   the user asks to commit, split work into commits, stage and commit, "commit
@@ -103,6 +104,45 @@ items together:
 Prefer separate commits for independent features, mechanical refactors, tooling,
 themes, or unrelated documentation. Order prerequisites before their consumers.
 Do not split so aggressively that an intermediate commit is broken or misleading.
+A request to "commit this" authorizes a commit workflow, not a single commit;
+never use the user's singular wording as evidence that the whole dirty tree is one
+atomic unit.
+
+### Mandatory commit-boundary challenge
+
+Before staging, challenge the proposed series from both the requester and reviewer
+perspectives. Treat a commit as an **oversized candidate** when any of these warning
+signals apply:
+
+- more than 12 changed paths;
+- more than 800 added-plus-deleted lines;
+- more than one independently explainable behavior axis, such as data model or
+  migration, runtime behavior, UI, and workflow/tooling.
+
+These are review triggers, not automatic split points. For every oversized
+candidate:
+
+1. Propose at least two concrete alternative splits.
+2. For each split, identify the prerequisite order, direct tests/docs, and whether
+   every intermediate commit remains buildable, reviewable, and honest.
+3. Explain why the selected boundary is smaller and more coherent than those
+   alternatives. "The files are intertwined," "it is one user request," and
+   "multiple reviews take longer" are not sufficient by themselves.
+4. Show the user the path count, changed-line count, behavior axes, and selected
+   split **before staging**. If still choosing the oversized single commit, obtain
+   explicit user agreement to send that boundary to review; ordinary commit
+   approval is not a substitute. That agreement does not bind either reviewer or
+   excuse a coherent smaller split they discover.
+
+On the default reviewed path, the requester-side plan and both external reviews
+are independent gates. A review finding that a coherent smaller split remains
+returns the workflow to boundary planning; do not resubmit the unchanged unit on
+strength of the prior user agreement. The implementing agent must not send an
+obviously oversized commit to reviewers and expect them to repair the boundary
+decision later. An explicit emergency bypass skips only the external-review gates
+as defined above, never Phase 0's boundary challenge.
+
+### Minimality inventory
 
 Before accepting any added file, dependency, script, config, abstraction, or test
 helper, write a minimality inventory:
@@ -117,6 +157,8 @@ The default is omission when the only benefit is convenience for the current
 workflow. Tests and validation are required; committing a new harness to run them
 is not automatically required.
 
+### Record and present the series
+
 Write down the complete proposed series before the first review. For every commit,
 record:
 
@@ -126,8 +168,10 @@ record:
 - dependency on earlier/later commits;
 - validation expected for that commit.
 
-Tell the user the proposed series briefly. This is a plan, not approval to commit.
-If meaningful boundaries are ambiguous, ask one focused question before staging.
+Tell the user the proposed series briefly, including the boundary-challenge
+metrics and alternatives for every oversized candidate. This is a plan, not
+approval to commit. If meaningful boundaries are ambiguous, ask one focused
+question before staging.
 
 ## Per-commit workflow
 
@@ -224,6 +268,14 @@ packet under `${TMPDIR:-/tmp}/commit-with-claude-review/` containing:
 12. **Verdict contract** — final line exactly `VERDICT: LGTM` or
     `VERDICT: REQUEST_CHANGES` and nowhere else.
 
+Both packets must also include **commit-boundary evidence**: changed paths,
+added-plus-deleted lines, behavior axes, at least two split candidates for an
+oversized commit, why the chosen unit is standalone, and any explicit user
+agreement to send an oversized unit to review. Both reviewers must recompute the
+size signals from the full staged diff and perform the audit regardless of the
+requester's classification. Missing or understated boundary evidence invalidates
+the round.
+
 Do not send secrets, credentials, private keys, `.env` values, or unrelated
 personal data. Stop and ask if load-bearing context is sensitive.
 
@@ -244,8 +296,11 @@ Append a role-specific mandate that requires the reviewer to:
   compatibility, performance, and security when relevant.
 - Separate facts visible in the diff/context from author assertions; mark any
   load-bearing assertion that cannot be verified.
-- Review commit atomicity and message accuracy, but leave repository-surface
-  minimality as Reviewer B's primary responsibility.
+- Review commit atomicity and message accuracy. Independently propose at least one
+  smaller split and test whether it would preserve buildability, migration
+  compatibility, and direct test coverage. Reject a boundary whose only defense
+  is that a future commit repairs its intermediate state, while leaving
+  repository-surface minimality as Reviewer B's primary responsibility.
 
 #### Reviewer B: scope, minimality, and maintenance attacker
 
@@ -263,12 +318,23 @@ Append a different mandate that requires the reviewer to:
   exemption from current-commit honesty or standalone validity.
 - Review whether tests prove the claimed behavior and whether the commit message
   admits the real scope.
+- Treat commit-boundary quality as a first-class review item. Independently propose
+  at least one smaller split for every commit and reject the commit when that
+  split is coherent and independently reviewable, even if the user previously
+  agreed to send the larger boundary for review. Reviewer effort, packet
+  preparation cost, and the fact that all changes serve one broad feature are not
+  reasons to approve an oversized unit.
 
 #### Require a concrete attack ledger
 
 Both packets require this response structure before the verdict:
 
 ```text
+## Commit-boundary audit
+- Size signals: <paths, changed lines, behavior axes>
+- Smaller split attempted: <concrete boundary and dependency order>
+- Result: <why current unit is minimal, or actionable split finding>
+
 ## Claims checked
 - <claim>: <verified, contradicted, or unverifiable> — <evidence>
 
@@ -284,8 +350,9 @@ Both packets require this response structure before the verdict:
 <exactly one allowed verdict token on the final line>
 ```
 
-A generic ledger such as "reviewed tests; looks good" is malformed and cannot
-approve. The reviewer must name concrete targets and attempted counterexamples.
+A missing or generic commit-boundary audit, or a generic ledger such as
+"reviewed tests; looks good," is malformed and cannot approve. The reviewer must
+name concrete split alternatives, targets, and attempted counterexamples.
 Do not demand fabricated findings: an evidence-backed failed attack is valid.
 
 #### Execute the blind round
@@ -313,8 +380,8 @@ claude -p --safe-mode --setting-sources "" --tools "" \
 #### Handle both results
 
 - Non-zero exit, empty output, any requested/emitted/simulated tool call, a
-  generic/missing attack ledger, malformed verdict, contradictory output, or
-  conditional LGTM fails that reviewer gate.
+  generic/missing commit-boundary audit or attack ledger, malformed verdict,
+  contradictory output, or conditional LGTM fails that reviewer gate.
 - Finish both blind calls, then investigate every finding on its merits.
 - Fix valid findings, update direct tests/docs, restage only this commit, rerun
   validation, rebuild both complete packets, and rerun **both** reviewers.
@@ -443,6 +510,8 @@ from step 1 for the next planned commit.
 Stop and ask the user when:
 
 - atomic boundaries are ambiguous;
+- an oversized candidate still has a coherent smaller split, or sending it whole
+  to review lacks the user's explicit boundary agreement;
 - unrelated pre-staged work exists;
 - required review context is sensitive;
 - validation cannot pass;
