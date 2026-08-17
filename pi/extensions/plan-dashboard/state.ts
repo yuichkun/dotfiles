@@ -59,6 +59,7 @@ export type PlanToolDetails =
 export interface PlanRuntimeState {
 	request?: PlanRequest;
 	plan?: Plan;
+	enabled: boolean;
 	workSinceUpdate: number;
 	turnsSinceUpdate: number;
 	error?: string;
@@ -138,6 +139,7 @@ export function isPlanToolDetails(value: unknown): value is PlanToolDetails {
 
 export class PlanRuntime {
 	private state: PlanRuntimeState = {
+		enabled: false,
 		workSinceUpdate: 0,
 		turnsSinceUpdate: 0,
 	};
@@ -150,6 +152,10 @@ export class PlanRuntime {
 
 	getPlan(): Plan | undefined {
 		return this.state.plan;
+	}
+
+	isEnabled(): boolean {
+		return this.state.enabled;
 	}
 
 	getPendingRequest(): PlanRequest | undefined {
@@ -168,7 +174,11 @@ export class PlanRuntime {
 	}
 
 	restore(entries: readonly SessionEntry[]): void {
-		this.state = { workSinceUpdate: 0, turnsSinceUpdate: 0 };
+		this.state = {
+			enabled: false,
+			workSinceUpdate: 0,
+			turnsSinceUpdate: 0,
+		};
 		this.consultations.clear();
 
 		for (const entry of entries) {
@@ -178,6 +188,7 @@ export class PlanRuntime {
 				isPlanRequest(entry.data)
 			) {
 				this.state.request = entry.data;
+				this.state.enabled = true;
 				continue;
 			}
 			if (entry.type !== "message") continue;
@@ -204,7 +215,12 @@ export class PlanRuntime {
 	}
 
 	setRequest(request: PlanRequest): void {
-		this.state = { ...this.state, request, error: undefined };
+		this.state = {
+			...this.state,
+			request,
+			enabled: true,
+			error: undefined,
+		};
 		this.emit();
 	}
 
@@ -220,6 +236,7 @@ export class PlanRuntime {
 		this.state = {
 			...this.state,
 			plan,
+			enabled: true,
 			workSinceUpdate: options.preserveStaleness
 				? this.state.workSinceUpdate
 				: 0,
@@ -267,6 +284,7 @@ export class PlanRuntime {
 		if (details.kind === "inspection") return;
 		try {
 			this.state.plan = migratePlan(details.plan);
+			this.state.enabled = true;
 			if (details.operation !== "compact") {
 				this.state.workSinceUpdate = 0;
 				this.state.turnsSinceUpdate = 0;
@@ -274,6 +292,7 @@ export class PlanRuntime {
 			this.state.error = undefined;
 		} catch (error) {
 			this.state.plan = undefined;
+			this.state.enabled = this.state.request !== undefined;
 			this.state.error =
 				error instanceof Error ? error.message : String(error);
 		}

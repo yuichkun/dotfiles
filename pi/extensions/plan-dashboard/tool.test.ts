@@ -38,18 +38,20 @@ interface ExecutablePlanTool {
 	): Renderable;
 }
 
-function setup(): {
+function setup(withRequest = true): {
 	runtime: PlanRuntime;
 	tool: ExecutablePlanTool;
 	execArgs: string[][];
 } {
 	const runtime = new PlanRuntime();
-	runtime.setRequest({
-		schemaVersion: 1,
-		id: "request-1",
-		task: "Implement passkeys",
-		createdAt: "2026-01-01T00:00:00.000Z",
-	});
+	if (withRequest) {
+		runtime.setRequest({
+			schemaVersion: 1,
+			id: "request-1",
+			task: "Implement passkeys",
+			createdAt: "2026-01-01T00:00:00.000Z",
+		});
+	}
 	let tool: ExecutablePlanTool | undefined;
 	const execArgs: string[][] = [];
 	const pi = {
@@ -361,6 +363,14 @@ test("restores compact snapshots without clearing prior staleness", () => {
 	assert.equal(runtime.getPlan()?.revision, compacted.revision);
 	assert.equal(runtime.getState().workSinceUpdate, 1);
 	assert.equal(runtime.getState().turnsSinceUpdate, 1);
+});
+
+test("rejects execution outside a plan workflow", async () => {
+	const { tool } = setup(false);
+	await assert.rejects(
+		tool.execute("get", { op: "get" }, undefined, undefined, context),
+		/living plan is inactive/,
+	);
 });
 
 test("rejects an explicitly supplied unknown consultation", async () => {

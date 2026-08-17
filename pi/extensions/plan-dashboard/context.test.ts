@@ -7,7 +7,7 @@ import { TEST_PLAN } from "./test-fixture.ts";
 
 test("stays completely silent without an explicit plan request", () => {
 	assert.equal(
-		buildPlanContext({ workSinceUpdate: 0, turnsSinceUpdate: 0 }),
+		buildPlanContext({ enabled: true, workSinceUpdate: 0, turnsSinceUpdate: 0 }),
 		undefined,
 	);
 });
@@ -20,6 +20,7 @@ test("injects direct planning with optional consultation for an explicit request
 			task: "Implement passkeys",
 			createdAt: "2026-01-01T00:00:00.000Z",
 		},
+		enabled: true,
 		workSinceUpdate: 0,
 		turnsSinceUpdate: 0,
 	});
@@ -60,6 +61,7 @@ test("reports automatically compacted progress in a fresh digest", () => {
 	});
 	const context = buildPlanContext({
 		plan,
+		enabled: true,
 		workSinceUpdate: 0,
 		turnsSinceUpdate: 0,
 	}) ?? "";
@@ -78,6 +80,7 @@ test("reports a manually compacted completed plan", () => {
 	).plan;
 	const context = buildPlanContext({
 		plan,
+		enabled: true,
 		workSinceUpdate: 0,
 		turnsSinceUpdate: 0,
 	}) ?? "";
@@ -106,6 +109,7 @@ test("escalates with the active frontier and compacted phase totals", () => {
 	};
 	const state: PlanRuntimeState = {
 		plan,
+		enabled: true,
 		workSinceUpdate: 12,
 		turnsSinceUpdate: 2,
 	};
@@ -135,6 +139,7 @@ test("bounds compacted phase summaries in stale context", () => {
 	};
 	const context = buildPlanContext({
 		plan,
+		enabled: true,
 		workSinceUpdate: 12,
 		turnsSinceUpdate: 0,
 	}) ?? "";
@@ -147,6 +152,7 @@ test("bounds compacted phase summaries in stale context", () => {
 test("retains get guidance when resolved detail is omitted before compaction", () => {
 	const context = buildPlanContext({
 		plan: TEST_PLAN,
+		enabled: true,
 		workSinceUpdate: 12,
 		turnsSinceUpdate: 0,
 	}) ?? "";
@@ -168,6 +174,7 @@ test("reports an empty frontier after every active step is compacted", () => {
 	).plan;
 	const context = buildPlanContext({
 		plan,
+		enabled: true,
 		workSinceUpdate: 12,
 		turnsSinceUpdate: 0,
 	}) ?? "";

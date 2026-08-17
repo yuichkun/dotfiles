@@ -175,6 +175,11 @@ export function registerPlanTool(
 		executionMode: "sequential",
 		renderShell: "self",
 		async execute(_toolCallId, params, signal, _onUpdate) {
+			if (!runtime.isEnabled()) {
+				throw new Error(
+					"The living plan is inactive on this branch. Use /plan <task> first.",
+				);
+			}
 			switch (params.op) {
 				case "get": {
 					const plan = runtime.getPlan();

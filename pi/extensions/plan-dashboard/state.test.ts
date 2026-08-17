@@ -91,6 +91,7 @@ test("restores a branch-local request, consultation, and latest plan", () => {
 	]);
 
 	assert.equal(runtime.getPendingRequest(), undefined);
+	assert.equal(runtime.isEnabled(), true);
 	assert.equal(runtime.getPlan()?.revision, TEST_PLAN.revision);
 	assert.equal(runtime.getConsultation(consultation.id)?.response, "Independent advice");
 	assert.equal(runtime.getState().workSinceUpdate, 1);
@@ -122,6 +123,7 @@ test("migrates a schema-v1 snapshot while restoring branch state", () => {
 	]);
 	assert.equal(runtime.getPlan()?.schemaVersion, 2);
 	assert.deepEqual(runtime.getPlan()?.archivedSteps, []);
+	assert.equal(runtime.isEnabled(), true);
 });
 
 test("treats a request without a plan snapshot as pending", () => {
@@ -138,6 +140,7 @@ test("treats a request without a plan snapshot as pending", () => {
 	]);
 	assert.equal(runtime.getPendingRequest()?.id, request.id);
 	assert.equal(runtime.getPlan(), undefined);
+	assert.equal(runtime.isEnabled(), true);
 });
 
 test("never displays an invalid latest snapshot as plausible progress", () => {
@@ -161,5 +164,6 @@ test("never displays an invalid latest snapshot as plausible progress", () => {
 		}),
 	]);
 	assert.equal(runtime.getPlan(), undefined);
+	assert.equal(runtime.isEnabled(), false);
 	assert.match(runtime.getState().error ?? "", /Unsupported plan schema/);
 });

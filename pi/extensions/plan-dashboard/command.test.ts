@@ -42,6 +42,7 @@ test("runs /plan as a one-shot request without mode state", async () => {
 	assert.equal(messages[0], "Implement passkeys");
 	assert.equal(runtime.getPendingRequest()?.task, "Implement passkeys");
 	assert.equal(runtime.getPlan(), undefined);
+	assert.equal(runtime.isEnabled(), true);
 });
 
 test("reports an existing plan as information rather than a warning", async () => {

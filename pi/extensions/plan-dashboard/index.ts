@@ -88,7 +88,25 @@ export default function planDashboardExtension(pi: ExtensionAPI): void {
 			});
 	};
 
-	const unsubscribe = planRuntime.subscribe(syncProgressHeader);
+	const syncPlanToolAvailability = (
+		state: Readonly<PlanRuntimeState>,
+	): void => {
+		const activeTools = pi.getActiveTools();
+		const hasPlanTool = activeTools.includes(PLAN_TOOL_NAME);
+		if (state.enabled === hasPlanTool) return;
+		pi.setActiveTools(
+			state.enabled
+				? [...activeTools, PLAN_TOOL_NAME]
+				: activeTools.filter((name) => name !== PLAN_TOOL_NAME),
+		);
+	};
+
+	const syncRuntime = (state: Readonly<PlanRuntimeState>): void => {
+		syncPlanToolAvailability(state);
+		syncProgressHeader(state);
+	};
+
+	const unsubscribe = planRuntime.subscribe(syncRuntime);
 	registerPlanCommand(pi, planRuntime);
 	registerPlanTool(pi, planRuntime);
 
@@ -110,7 +128,6 @@ export default function planDashboardExtension(pi: ExtensionAPI): void {
 		planRuntime.restore(ctx.sessionManager.getBranch());
 		const { error } = planRuntime.getState();
 		if (error) ctx.ui.notify(`Living plan state is invalid: ${error}`, "error");
-		syncProgressHeader(planRuntime.getState());
 	});
 
 	pi.on("session_tree", async (_event, ctx) => {

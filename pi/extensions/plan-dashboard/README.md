@@ -1,7 +1,7 @@
 # Living Plan
 
 Pi 0.84.0のSessionへ、依存関係付きのLiving Planを保存・復元・表示するExtension。
-Plan Modeや権限制御は導入せず、ユーザーが`/plan`を実行したSessionだけでPlanを継続管理する。
+Plan Modeや権限制御は導入せず、ユーザーが`/plan`を実行したbranchだけでPlanを継続管理する。Plan workflowがない通常Sessionでは`plan` Toolをinactiveにし、system promptへの追加コストを発生させない。
 
 ## Planの作成
 
@@ -21,7 +21,7 @@ Plan Modeや権限制御は導入せず、ユーザーが`/plan`を実行したS
 
 ### 初回Workflow
 
-1. タスクを通常のUser MessageとしてSessionへ追加する。
+1. `/plan`がPlan Toolを有効化し、タスクを通常のUser MessageとしてSessionへ追加する。
 2. Agentが要求とコードベースを調査する。
 3. 通常のタスクでは、Agentが`set` operationで依存関係付きPlanを直接保存する。Fable consultationは必要ない。
 4. 難しい、曖昧、高リスクで、独立した視点が実質的に役立つ場合だけ`consult`を使う。ユーザーが不要と指定した場合は呼ばない。
