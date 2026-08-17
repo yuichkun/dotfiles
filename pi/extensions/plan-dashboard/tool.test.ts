@@ -365,6 +365,15 @@ test("restores compact snapshots without clearing prior staleness", () => {
 	assert.equal(runtime.getState().turnsSinceUpdate, 1);
 });
 
+test("rejects tool execution while the plan is paused", async () => {
+	const { runtime, tool } = setup();
+	runtime.setEnabled(false);
+	await assert.rejects(
+		tool.execute("get", { op: "get" }, undefined, undefined, context),
+		/living plan is inactive/,
+	);
+});
+
 test("rejects execution outside a plan workflow", async () => {
 	const { tool } = setup(false);
 	await assert.rejects(

@@ -55,6 +55,7 @@ function statusGlyph(status: string): string {
 export function buildPlanContext(
 	state: Readonly<PlanRuntimeState>,
 ): string | undefined {
+	if (!state.enabled) return undefined;
 	const pending = pendingRequestContext(state);
 	if (pending) return pending;
 	const plan = state.plan;

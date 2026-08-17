@@ -89,6 +89,18 @@ test("reports a manually compacted completed plan", () => {
 	assert.match(context, /Ready: none/);
 });
 
+test("stays silent while an existing plan is paused", () => {
+	assert.equal(
+		buildPlanContext({
+			plan: TEST_PLAN,
+			enabled: false,
+			workSinceUpdate: 12,
+			turnsSinceUpdate: 8,
+		}),
+		undefined,
+	);
+});
+
 test("escalates with the active frontier and compacted phase totals", () => {
 	const compacted = compactPlan(
 		TEST_PLAN,

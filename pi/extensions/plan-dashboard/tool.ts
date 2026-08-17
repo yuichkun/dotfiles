@@ -177,7 +177,7 @@ export function registerPlanTool(
 		async execute(_toolCallId, params, signal, _onUpdate) {
 			if (!runtime.isEnabled()) {
 				throw new Error(
-					"The living plan is inactive on this branch. Use /plan <task> first.",
+					"The living plan is inactive on this Pi session branch. Use /plan on to resume it or /plan <task> to start one.",
 				);
 			}
 			switch (params.op) {

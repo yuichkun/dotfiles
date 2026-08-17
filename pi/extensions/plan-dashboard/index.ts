@@ -27,7 +27,7 @@ export default function planDashboardExtension(pi: ExtensionAPI): void {
 	const headerState = (
 		state: Readonly<PlanRuntimeState>,
 	): ProgressHeaderState | undefined => {
-		if (!state.plan) return undefined;
+		if (!state.plan || !state.enabled) return undefined;
 		return {
 			plan: state.plan,
 			workSinceUpdate: state.workSinceUpdate,
@@ -72,7 +72,9 @@ export default function planDashboardExtension(pi: ExtensionAPI): void {
 					},
 					onHandle: (handle) => {
 						progressHeaderHandle = handle;
-						handle.setHidden(!planRuntime.getPlan());
+						handle.setHidden(
+							!planRuntime.getPlan() || !planRuntime.isEnabled(),
+						);
 					},
 				},
 			)

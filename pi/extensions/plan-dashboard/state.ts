@@ -7,12 +7,20 @@ import {
 } from "./plan.ts";
 
 export const PLAN_REQUEST_ENTRY = "living-plan.request";
+export const PLAN_CONTROL_ENTRY = "living-plan.control";
 export const PLAN_TOOL_NAME = "plan";
 
 export interface PlanRequest {
 	schemaVersion: 1;
 	id: string;
 	task: string;
+	createdAt: string;
+}
+
+export interface PlanControl {
+	schemaVersion: 1;
+	id: string;
+	enabled: boolean;
 	createdAt: string;
 }
 
@@ -93,6 +101,16 @@ export function isPlanRequest(value: unknown): value is PlanRequest {
 		value.schemaVersion === 1 &&
 		isNonEmptyString(value.id) &&
 		isNonEmptyString(value.task) &&
+		isIsoTimestamp(value.createdAt)
+	);
+}
+
+export function isPlanControl(value: unknown): value is PlanControl {
+	return (
+		isRecord(value) &&
+		value.schemaVersion === 1 &&
+		isNonEmptyString(value.id) &&
+		typeof value.enabled === "boolean" &&
 		isIsoTimestamp(value.createdAt)
 	);
 }
@@ -180,31 +198,46 @@ export class PlanRuntime {
 			turnsSinceUpdate: 0,
 		};
 		this.consultations.clear();
+		let controlSeen = false;
 
 		for (const entry of entries) {
+			if (
+				entry.type === "custom" &&
+				entry.customType === PLAN_CONTROL_ENTRY &&
+				isPlanControl(entry.data)
+			) {
+				this.state.enabled = entry.data.enabled;
+				controlSeen = true;
+				continue;
+			}
 			if (
 				entry.type === "custom" &&
 				entry.customType === PLAN_REQUEST_ENTRY &&
 				isPlanRequest(entry.data)
 			) {
 				this.state.request = entry.data;
-				this.state.enabled = true;
+				if (!controlSeen) this.state.enabled = true;
 				continue;
 			}
 			if (entry.type !== "message") continue;
 			const message = entry.message;
 			if (message.role === "assistant" && this.state.plan) {
-				this.state.turnsSinceUpdate++;
+				if (this.state.enabled) this.state.turnsSinceUpdate++;
 				continue;
 			}
 			if (message.role !== "toolResult") continue;
 
 			if (message.toolName === PLAN_TOOL_NAME) {
 				this.restorePlanToolResult(message.details);
+				if (!controlSeen) {
+					this.state.enabled =
+						this.state.plan !== undefined || this.state.request !== undefined;
+				}
 				continue;
 			}
 			if (
 				this.state.plan &&
+				this.state.enabled &&
 				!message.isError &&
 				TRACKED_WORK_TOOLS.has(message.toolName)
 			) {
@@ -224,6 +257,12 @@ export class PlanRuntime {
 		this.emit();
 	}
 
+	setEnabled(enabled: boolean): void {
+		if (this.state.enabled === enabled) return;
+		this.state = { ...this.state, enabled };
+		this.emit();
+	}
+
 	applyConsultation(consultation: PlanConsultation): void {
 		this.consultations.set(consultation.id, consultation);
 	}
@@ -236,7 +275,6 @@ export class PlanRuntime {
 		this.state = {
 			...this.state,
 			plan,
-			enabled: true,
 			workSinceUpdate: options.preserveStaleness
 				? this.state.workSinceUpdate
 				: 0,
@@ -251,6 +289,7 @@ export class PlanRuntime {
 	recordToolResult(toolName: string, isError: boolean): void {
 		if (
 			!this.state.plan ||
+			!this.state.enabled ||
 			isError ||
 			!TRACKED_WORK_TOOLS.has(toolName)
 		) {
@@ -264,7 +303,7 @@ export class PlanRuntime {
 	}
 
 	recordTurn(): void {
-		if (!this.state.plan) return;
+		if (!this.state.plan || !this.state.enabled) return;
 		this.state = {
 			...this.state,
 			turnsSinceUpdate: this.state.turnsSinceUpdate + 1,
@@ -284,7 +323,6 @@ export class PlanRuntime {
 		if (details.kind === "inspection") return;
 		try {
 			this.state.plan = migratePlan(details.plan);
-			this.state.enabled = true;
 			if (details.operation !== "compact") {
 				this.state.workSinceUpdate = 0;
 				this.state.turnsSinceUpdate = 0;
@@ -292,7 +330,6 @@ export class PlanRuntime {
 			this.state.error = undefined;
 		} catch (error) {
 			this.state.plan = undefined;
-			this.state.enabled = this.state.request !== undefined;
 			this.state.error =
 				error instanceof Error ? error.message : String(error);
 		}

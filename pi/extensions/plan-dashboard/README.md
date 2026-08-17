@@ -1,14 +1,16 @@
 # Living Plan
 
 Pi 0.84.0のSessionへ、依存関係付きのLiving Planを保存・復元・表示するExtension。
-Plan Modeや権限制御は導入せず、ユーザーが`/plan`を実行したbranchだけでPlanを継続管理する。Plan workflowがない通常Sessionでは`plan` Toolをinactiveにし、system promptへの追加コストを発生させない。
+Plan Modeや権限制御は導入せず、ユーザーが`/plan`を実行したPi Session branchだけでPlanを継続管理する。Plan workflowがない通常Sessionでは`plan` Toolをinactiveにし、system promptへの追加コストを発生させない。
 
-## Planの作成
+## Planの作成とON/OFF
 
 タスクを引数としてワンショットWorkflowを起動する。
 
 ```text
 /plan Passkey認証を追加し、既存ログインから移行できるようにする
+/plan off
+/plan on
 ```
 
 引数を省略すると、タスクを記入するmulti-line editorが開く。
@@ -17,7 +19,14 @@ Plan Modeや権限制御は導入せず、ユーザーが`/plan`を実行したb
 /plan
 ```
 
-`/plan`を実行していないSessionでは、Planの自動作成、context注入、staleness計測を一切行わない。
+引数全体が`on`または`off`に大文字小文字を問わず一致した場合だけsubcommandとして扱う。
+
+- `off`: 現在Planを削除せずpauseする
+- `on`: pause中のPlanをresumeする
+
+ON/OFFはCustom Entryへ保存され、`session_start`と`session_tree`で現在のPi Session branchから復元される。旧SessionはPlan workflowが存在すればONとして復元する。
+
+OFF中は`plan` Toolとprompt metadata、context注入、staleness counter、fixed progress headerを停止する。DashboardはOFF中も閲覧できる。
 
 ### 初回Workflow
 
@@ -37,7 +46,7 @@ claude -p --model fable --effort max --safe-mode --tools "" --no-session-persist
 
 ## 継続更新
 
-Planが存在する場合だけ、Piの`context` eventで毎回のLLM callへ最新digestを追加する。
+PlanがONの場合だけ、Piの`context` eventで毎回のLLM callへ最新digestを追加する。
 
 ```text
 Plan <id> r7
@@ -76,16 +85,16 @@ Plan schema v2は、実行対象の`steps`と、解決済みIDを保持する`ar
 
 ## 保存とbranch
 
-Plan作成要求はCustom Entry、Fable consultationとPlan snapshotは`plan` Tool Resultの`details`へ保存する。各Plan変更はrevision、理由、完全snapshotを持つ。
+Plan作成要求とON/OFFはCustom Entry、Fable consultationとPlan snapshotは`plan` Tool Resultの`details`へ保存する。各Plan変更はrevision、理由、完全snapshotを持つ。
 
-`session_start`と`session_tree`で現在の`getBranch()`だけを走査するため、rewindや兄弟branchはそれぞれ異なるPlanと進捗を保持できる。別Sessionへは自動継承しない。
+`session_start`と`session_tree`で現在の`getBranch()`だけを走査するため、rewindや兄弟のPi Session branchはそれぞれ異なるPlan、pause状態、進捗を保持できる。別Sessionへは自動継承しない。
 
 ## Dashboard
 
 - `/palette` → `Open Plan Dashboard…`
 - `/plan-dashboard`
 
-画面最上部のfixed Overlayにはprogress barと現在Stepを表示する。PlanがないbranchではOverlayを表示しない。staleness thresholdを超えた場合は、最後の更新以降のwork/turn数を表示する。
+画面最上部のfixed Overlayにはprogress barと現在Stepを表示する。Planがない、またはOFFのPi Session branchではOverlayを表示しない。staleness thresholdを超えた場合は、最後の更新以降のwork/turn数を表示する。
 
 ### Overview
 

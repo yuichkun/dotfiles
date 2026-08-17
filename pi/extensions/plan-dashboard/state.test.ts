@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import {
+	PLAN_CONTROL_ENTRY,
 	PLAN_REQUEST_ENTRY,
 	PlanRuntime,
 	type PlanConsultation,
@@ -149,6 +150,15 @@ test("never displays an invalid latest snapshot as plausible progress", () => {
 	runtime.restore([
 		entry({
 			type: "message",
+			message: {
+				role: "toolResult",
+				toolName: "plan",
+				details: { kind: "plan", operation: "set", plan: TEST_PLAN },
+				isError: false,
+			},
+		}),
+		entry({
+			type: "message",
 			id: "1",
 			parentId: null,
 			timestamp: TEST_PLAN.createdAt,
@@ -166,4 +176,63 @@ test("never displays an invalid latest snapshot as plausible progress", () => {
 	assert.equal(runtime.getPlan(), undefined);
 	assert.equal(runtime.isEnabled(), false);
 	assert.match(runtime.getState().error ?? "", /Unsupported plan schema/);
+});
+
+test("replays branch-local controls and freezes staleness while paused", () => {
+	const control = (enabled: boolean) =>
+		entry({
+			type: "custom",
+			customType: PLAN_CONTROL_ENTRY,
+			data: {
+				schemaVersion: 1,
+				id: `control-${enabled}`,
+				enabled,
+				createdAt: TEST_PLAN.createdAt,
+			},
+		});
+	const work = () =>
+		entry({
+			type: "message",
+			message: {
+				role: "toolResult",
+				toolName: "edit",
+				isError: false,
+			},
+		});
+	const turn = () => entry({ type: "message", message: { role: "assistant" } });
+	const runtime = new PlanRuntime();
+	runtime.restore([
+		entry({
+			type: "custom",
+			customType: PLAN_REQUEST_ENTRY,
+			data: request,
+		}),
+		entry({
+			type: "message",
+			message: {
+				role: "toolResult",
+				toolName: "plan",
+				details: { kind: "plan", operation: "set", plan: TEST_PLAN },
+				isError: false,
+			},
+		}),
+		work(),
+		turn(),
+		control(false),
+		work(),
+		turn(),
+		control(true),
+		work(),
+		turn(),
+		control(false),
+		work(),
+		turn(),
+	]);
+	assert.equal(runtime.isEnabled(), false);
+	assert.equal(runtime.getState().workSinceUpdate, 2);
+	assert.equal(runtime.getState().turnsSinceUpdate, 2);
+	runtime.recordToolResult("edit", false);
+	runtime.recordTurn();
+	assert.equal(runtime.getState().workSinceUpdate, 2);
+	assert.equal(runtime.getState().turnsSinceUpdate, 2);
 });
