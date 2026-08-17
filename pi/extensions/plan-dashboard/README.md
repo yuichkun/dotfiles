@@ -28,7 +28,7 @@ Plan Modeや権限制御は導入せず、ユーザーが`/plan`を実行したP
 
 ON/OFFはCustom Entryへ保存され、`session_start`と`session_tree`で現在のPi Session branchから復元される。旧SessionはPlan workflowが存在すればONとして復元する。
 
-OFF中は`plan` Toolとprompt metadata、context注入、staleness counter、fixed progress headerを停止する。DashboardはOFF中も閲覧できる。
+OFF中は`plan` Toolとprompt metadata、context注入、staleness counter、fixed progress headerを停止する。DashboardはOFF中も閲覧でき、titleに`PAUSED`を表示する。
 
 ### 初回Workflow
 

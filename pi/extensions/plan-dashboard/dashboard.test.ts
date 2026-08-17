@@ -1,13 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type {
+	ExtensionContext,
 	KeybindingsManager,
+	SessionEntry,
 	Theme,
 } from "@earendil-works/pi-coding-agent";
 import type { TUI } from "@earendil-works/pi-tui";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import type { ModalContext } from "../shared/modal.ts";
-import { PlanDashboardComponent } from "./dashboard.ts";
+import { openPlanDashboard, PlanDashboardComponent } from "./dashboard.ts";
 import { compactPlan, createOrRevisePlan, type PlanStepInput } from "./plan.ts";
 import { TEST_PLAN } from "./test-fixture.ts";
 
@@ -25,6 +27,7 @@ function createComponent(
 	staleness = { workSinceUpdate: 0, turnsSinceUpdate: 0 },
 	themeOverride?: Theme,
 	plan = TEST_PLAN,
+	enabled = true,
 ): PlanDashboardComponent {
 	const theme = themeOverride ?? ({
 		fg: (_color: string, text: string) => text,
@@ -49,7 +52,7 @@ function createComponent(
 		keybindings,
 		close: () => {},
 	};
-	return new PlanDashboardComponent(plan, context, staleness);
+	return new PlanDashboardComponent(plan, context, staleness, enabled);
 }
 
 function assertWidthSafe(lines: readonly string[], width: number): void {
@@ -354,6 +357,75 @@ test("enter opens a scrollable full detail view and escape returns", () => {
 	assert.match(component.render(120).join("\n"), /Plan Dashboard · Living Plan実装/);
 });
 
+test("marks a paused plan without hiding its dashboard", () => {
+	assert.doesNotMatch(createComponent().render(120).join("\n"), /PAUSED/);
+	const component = createComponent(
+		30,
+		{ workSinceUpdate: 0, turnsSinceUpdate: 0 },
+		undefined,
+		TEST_PLAN,
+		false,
+	);
+	assert.match(
+		component.render(120).join("\n"),
+		/Plan Dashboard · PAUSED · Living Plan実装/,
+	);
+	component.handleInput("\r");
+	assert.match(component.render(120).join("\n"), /Plan Step · PAUSED · S04/);
+});
+
+test("restores paused state through the dashboard entry point", async () => {
+	const branch = [
+		{
+			type: "message",
+			message: {
+				role: "toolResult",
+				toolName: "plan",
+				details: { kind: "plan", operation: "set", plan: TEST_PLAN },
+				isError: false,
+			},
+		},
+		{
+			type: "custom",
+			customType: "living-plan.control",
+			data: {
+				schemaVersion: 1,
+				id: "control-1",
+				enabled: false,
+				createdAt: TEST_PLAN.createdAt,
+			},
+		},
+	] as unknown as SessionEntry[];
+	let output = "";
+	const theme = {
+		fg: (_color: string, text: string) => text,
+		bg: (_color: string, text: string) => text,
+		bold: (text: string) => text,
+		inverse: (text: string) => text,
+	} as unknown as Theme;
+	const keybindings = {
+		matches: (data: string, action: string) => keyByAction[action] === data,
+	} as unknown as KeybindingsManager;
+	const tui = {
+		terminal: { rows: 30, columns: 120 },
+		requestRender: () => {},
+	} as unknown as TUI;
+	const ctx = {
+		mode: "tui",
+		sessionManager: { getBranch: () => branch },
+		ui: {
+			notify: () => {},
+			custom: async (factory: Function) => {
+				const component = factory(tui, theme, keybindings, () => {});
+				output = component.render(120).join("\n");
+				return undefined;
+			},
+		},
+	} as unknown as ExtensionContext;
+	await openPlanDashboard(ctx);
+	assert.match(output, /Plan Dashboard · PAUSED · Living Plan実装/);
+});
+
 test("opens compacted history grouped by phase", () => {
 	const noArchive = createComponent();
 	assert.doesNotMatch(noArchive.render(120).join("\n"), /h archive/);
@@ -373,13 +445,17 @@ test("opens compacted history grouped by phase", () => {
 		{ workSinceUpdate: 0, turnsSinceUpdate: 0 },
 		undefined,
 		plan,
+		false,
 	);
 	assert.match(component.render(120).join("\n"), /compacted 15/);
 	component.handleInput("h");
 	for (const width of [48, 80, 120, 140]) {
 		const archive = component.render(width);
 		assertWidthSafe(archive, width);
-		assert.match(archive.join("\n"), /Plan Archive/);
+		assert.match(
+			archive.join("\n"),
+			/Plan Archive · PAUSED · Living Plan実装/,
+		);
 		if (width === 48) {
 			assert.match(archive.join("\n"), /Full step details remain/);
 			assert.match(archive.join("\n"), /earlier plan tool/);
