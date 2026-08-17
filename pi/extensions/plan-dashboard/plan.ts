@@ -112,6 +112,13 @@ export interface PlanSummary {
 	superseded: number;
 }
 
+export interface ArchivePhaseSummary {
+	phase: string;
+	done: number;
+	superseded: number;
+	stepIds: readonly string[];
+}
+
 export class PlanValidationError extends Error {
 	constructor(message: string) {
 		super(message);
@@ -727,4 +734,26 @@ export function summarizePlan(
 			views.filter((view) => view.status === "superseded").length +
 			archivedSuperseded,
 	};
+}
+
+export function summarizeArchiveByPhase(
+	archivedSteps: readonly ArchivedPlanStep[],
+): ArchivePhaseSummary[] {
+	const byPhase = new Map<string, { done: number; superseded: number; stepIds: string[] }>();
+	for (const step of archivedSteps) {
+		const summary = byPhase.get(step.phase) ?? {
+			done: 0,
+			superseded: 0,
+			stepIds: [],
+		};
+		summary[step.status]++;
+		summary.stepIds.push(step.id);
+		byPhase.set(step.phase, summary);
+	}
+	return [...byPhase].map(([phase, summary]) => ({
+		phase,
+		done: summary.done,
+		superseded: summary.superseded,
+		stepIds: summary.stepIds,
+	}));
 }

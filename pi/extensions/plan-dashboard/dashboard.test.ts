@@ -288,6 +288,7 @@ test("keeps manually compacted progress visible without requiring active history
 	const afterEnter = emptyComponent.render(120).join("\n");
 	assert.match(afterEnter, /Plan Dashboard/);
 	assert.match(afterEnter, /a resolved/);
+	assert.match(afterEnter, /h archive/);
 	assert.doesNotMatch(afterEnter, /Plan Step/);
 });
 
@@ -351,4 +352,53 @@ test("enter opens a scrollable full detail view and escape returns", () => {
 
 	component.handleInput("\u001b");
 	assert.match(component.render(120).join("\n"), /Plan Dashboard · Living Plan実装/);
+});
+
+test("opens compacted history grouped by phase", () => {
+	const noArchive = createComponent();
+	assert.doesNotMatch(noArchive.render(120).join("\n"), /h archive/);
+	noArchive.handleInput("h");
+	assert.doesNotMatch(noArchive.render(120).join("\n"), /Plan Archive/);
+	const completed = {
+		...TEST_PLAN,
+		steps: TEST_PLAN.steps.map((step) => ({ ...step, status: "done" as const })),
+	};
+	const { plan } = compactPlan(
+		completed,
+		{ baseRevision: completed.revision, note: "Archive history" },
+		"2026-01-02T00:00:00.000Z",
+	);
+	const component = createComponent(
+		10,
+		{ workSinceUpdate: 0, turnsSinceUpdate: 0 },
+		undefined,
+		plan,
+	);
+	assert.match(component.render(120).join("\n"), /compacted 15/);
+	component.handleInput("h");
+	for (const width of [48, 80, 120, 140]) {
+		const archive = component.render(width);
+		assertWidthSafe(archive, width);
+		assert.match(archive.join("\n"), /Plan Archive/);
+		if (width === 48) {
+			assert.match(archive.join("\n"), /Full step details remain/);
+			assert.match(archive.join("\n"), /earlier plan tool/);
+			assert.match(archive.join("\n"), /results on this branch/);
+			assert.match(archive.join("\n"), /✔ 3 · ⊘ 0/);
+		}
+		if (width >= 80) assert.match(archive.join("\n"), /S01, S02, S03/);
+	}
+	const firstPage = component.render(120).join("\n");
+	component.handleInput(keyByAction["tui.select.pageDown"]!);
+	const secondPage = component.render(120).join("\n");
+	assert.notEqual(secondPage, firstPage);
+	assert.match(secondPage, /6-10\//);
+	component.handleInput(keyByAction["tui.select.up"]!);
+	assert.match(component.render(120).join("\n"), /5-9\//);
+	component.handleInput(keyByAction["tui.select.down"]!);
+	assert.match(component.render(120).join("\n"), /6-10\//);
+	component.handleInput(keyByAction["tui.select.pageUp"]!);
+	assert.equal(component.render(120).join("\n"), firstPage);
+	component.handleInput(keyByAction["tui.select.cancel"]!);
+	assert.match(component.render(120).join("\n"), /Plan Dashboard/);
 });

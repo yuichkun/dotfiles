@@ -27,6 +27,7 @@ import {
 } from "./graph-layout.ts";
 import {
 	buildPlanViews,
+	summarizeArchiveByPhase,
 	summarizePlan,
 	type DisplayStepStatus,
 	type Plan,
@@ -463,9 +464,12 @@ export class PlanDashboardComponent extends BaseModal<void> {
 	private readonly viewsById: ReadonlyMap<string, PlanStepView>;
 	private selectedStepId = "";
 	private detailOpen = false;
+	private archiveOpen = false;
 	private showResolved = false;
 	private detailScroll = 0;
+	private archiveScroll = 0;
 	private lastDetailMaxScroll = 0;
+	private lastArchiveMaxScroll = 0;
 	private dependencyHighlight = false;
 	private lastLayout?: GraphLayout;
 
@@ -489,6 +493,10 @@ export class PlanDashboardComponent extends BaseModal<void> {
 	}
 
 	override handleInput(data: string): void {
+		if (this.archiveOpen) {
+			this.handleArchiveInput(data);
+			return;
+		}
 		if (this.detailOpen) {
 			this.handleDetailInput(data);
 			return;
@@ -507,6 +515,12 @@ export class PlanDashboardComponent extends BaseModal<void> {
 				this.returnToCurrentOrFrontier();
 			}
 			this.lastLayout = undefined;
+			this.requestRender();
+			return;
+		}
+		if (matchesKey(data, "h") && this.plan.archivedSteps.length > 0) {
+			this.archiveOpen = true;
+			this.archiveScroll = 0;
 			this.requestRender();
 			return;
 		}
@@ -551,6 +565,7 @@ export class PlanDashboardComponent extends BaseModal<void> {
 
 	override render(width: number): string[] {
 		if (width < 4) return [truncateToWidth("Plan", width, "")];
+		if (this.archiveOpen) return this.renderArchive(width);
 		return this.detailOpen
 			? this.renderDetail(width)
 			: this.renderOverview(width);
@@ -571,9 +586,11 @@ export class PlanDashboardComponent extends BaseModal<void> {
 		const selected = this.getSelectedView();
 		lines.push(frame.row(this.renderSelectedSummary(selected)));
 		lines.push(frame.row(this.renderSelectedGoal(selected)));
+		const archiveHint =
+			this.plan.archivedSteps.length > 0 ? " · h archive" : "";
 		lines.push(
 			frame.row(
-				` ${paint(this.theme, "tertiary", "←→ stages · ↑↓ lane · Tab frontier · d trace · a resolved · 0 current · Enter details · Esc close")}`,
+				` ${paint(this.theme, "tertiary", `←→ stages · ↑↓ lane · Tab frontier · d trace · a resolved${archiveHint} · 0 current · Enter details · Esc close`)}`,
 			),
 		);
 		lines.push(frame.bottom());
@@ -1092,6 +1109,106 @@ export class PlanDashboardComponent extends BaseModal<void> {
 		return lines;
 	}
 
+	private handleArchiveInput(data: string): void {
+		if (this.isCancelInput(data)) {
+			this.archiveOpen = false;
+			this.archiveScroll = 0;
+			this.requestRender();
+			return;
+		}
+		if (this.keybindings.matches(data, "tui.select.up")) {
+			this.archiveScroll = Math.max(0, this.archiveScroll - 1);
+			this.requestRender();
+			return;
+		}
+		if (this.keybindings.matches(data, "tui.select.down")) {
+			this.archiveScroll = Math.min(
+				this.lastArchiveMaxScroll,
+				this.archiveScroll + 1,
+			);
+			this.requestRender();
+			return;
+		}
+		if (this.keybindings.matches(data, "tui.select.pageUp")) {
+			this.archiveScroll = Math.max(
+				0,
+				this.archiveScroll - this.getArchiveBodyHeight(),
+			);
+			this.requestRender();
+			return;
+		}
+		if (this.keybindings.matches(data, "tui.select.pageDown")) {
+			this.archiveScroll = Math.min(
+				this.lastArchiveMaxScroll,
+				this.archiveScroll + this.getArchiveBodyHeight(),
+			);
+			this.requestRender();
+		}
+	}
+
+	private renderArchive(width: number): string[] {
+		const frame = new ModalFrame(this.theme, width);
+		const bodyHeight = this.getArchiveBodyHeight();
+		const archiveLines = this.buildArchiveLines(frame.innerWidth);
+		this.lastArchiveMaxScroll = Math.max(0, archiveLines.length - bodyHeight);
+		this.archiveScroll = Math.min(
+			this.archiveScroll,
+			this.lastArchiveMaxScroll,
+		);
+		const visible = archiveLines.slice(
+			this.archiveScroll,
+			this.archiveScroll + bodyHeight,
+		);
+		while (visible.length < bodyHeight) visible.push("");
+		const lines = [
+			frame.top(`Plan Archive · ${this.plan.title}`),
+			frame.separator(),
+		];
+		for (const line of visible) lines.push(frame.row(line));
+		lines.push(frame.separator());
+		const scroll =
+			this.lastArchiveMaxScroll > 0
+				? ` · ${this.archiveScroll + 1}-${Math.min(archiveLines.length, this.archiveScroll + bodyHeight)}/${archiveLines.length}`
+				: "";
+		lines.push(
+			frame.row(
+				` ${paint(this.theme, "tertiary", `↑↓ scroll · PgUp/PgDn page · Esc back${scroll}`)}`,
+			),
+		);
+		lines.push(frame.bottom());
+		return lines;
+	}
+
+	private buildArchiveLines(width: number): string[] {
+		const lines: string[] = [];
+		const summaries = summarizeArchiveByPhase(this.plan.archivedSteps);
+		lines.push(
+			` ${paint(this.theme, "primary", this.theme.bold(`${this.plan.archivedSteps.length} COMPACTED STEPS`))}`,
+		);
+		this.pushWrappedText(
+			lines,
+			"Full step details remain in earlier plan tool results on this branch.",
+			width,
+			"tertiary",
+			" ",
+		);
+		lines.push("");
+		for (const summary of summaries) {
+			lines.push(
+				` ${paint(this.theme, "secondary", `✔ ${summary.done} · ⊘ ${summary.superseded}`)}  ${paint(this.theme, "primary", this.theme.bold(summary.phase))}`,
+			);
+			this.pushWrappedText(
+				lines,
+				summary.stepIds.join(", "),
+				width,
+				"tertiary",
+				"   ",
+			);
+			lines.push("");
+		}
+		return lines;
+	}
+
 	private sectionTitle(title: string): string {
 		return paint(this.theme, "primary", this.theme.bold(title));
 	}
@@ -1143,6 +1260,10 @@ export class PlanDashboardComponent extends BaseModal<void> {
 
 	private getDetailBodyHeight(): number {
 		return Math.max(4, this.getTargetModalHeight() - 6);
+	}
+
+	private getArchiveBodyHeight(): number {
+		return Math.max(4, this.getTargetModalHeight() - 5);
 	}
 }
 

@@ -7,6 +7,7 @@ import {
 	createOrRevisePlan,
 	migratePlan,
 	PlanValidationError,
+	summarizeArchiveByPhase,
 	summarizePlan,
 	validatePlan,
 	type Plan,
@@ -45,6 +46,45 @@ test("derives ready and blocked states from stored dependencies", () => {
 	assert.deepEqual(
 		views.find((view) => view.step.id === "S07")?.blockers.map((step) => step.id),
 		["S04", "S05", "S06"],
+	);
+});
+
+test("summarizes compacted history by phase in source order", () => {
+	const archived = compactPlan(
+		TEST_PLAN,
+		{ baseRevision: TEST_PLAN.revision, note: "Archive history" },
+		"2026-01-02T00:00:00.000Z",
+	).plan.archivedSteps;
+	assert.deepEqual(
+		summarizeArchiveByPhase([
+			...archived,
+			{
+				id: "S99",
+				phase: "Legacy",
+				status: "superseded",
+				compactedAt: "2026-01-02T00:00:00.000Z",
+			},
+			{
+				id: "S98",
+				phase: "調査",
+				status: "superseded",
+				compactedAt: "2026-01-02T00:00:00.000Z",
+			},
+		]),
+		[
+			{
+				phase: "調査",
+				done: 3,
+				superseded: 1,
+				stepIds: ["S01", "S02", "S03", "S98"],
+			},
+			{
+				phase: "Legacy",
+				done: 0,
+				superseded: 1,
+				stepIds: ["S99"],
+			},
+		],
 	);
 });
 
