@@ -15,6 +15,24 @@ function hasPlanWorkflow(runtime: PlanRuntime): boolean {
 	);
 }
 
+function statusMessage(runtime: PlanRuntime): string {
+	const plan = runtime.getPlan();
+	const pending = runtime.getPendingRequest();
+	if (!plan && !pending) return "Living plan: inactive (no plan on this branch)";
+	const activity = runtime.isEnabled() ? "ON" : "OFF (paused)";
+	if (pending && !plan) {
+		return `Living plan: ${activity}\nPending request: ${pending.task}`;
+	}
+	if (!plan) return `Living plan: ${activity}`;
+	const current = plan.steps.find((step) => step.status === "in_progress");
+	return [
+		`Living plan: ${activity}`,
+		`${plan.title} · r${plan.revision}`,
+		current ? `Current: ${current.id} — ${current.title}` : "Current: none",
+		`Active steps: ${plan.steps.length} · archived: ${plan.archivedSteps.length}`,
+	].join("\n");
+}
+
 function persistPlanEnabled(
 	pi: ExtensionAPI,
 	runtime: PlanRuntime,
@@ -35,10 +53,15 @@ export function registerPlanCommand(
 	runtime: PlanRuntime,
 ): void {
 	pi.registerCommand("plan", {
-		description: "Create, pause, or resume a living plan",
+		description: "Create, pause, resume, or inspect a living plan",
 		handler: async (args, ctx) => {
 			const raw = args.trim();
 			const subcommand = raw.toLowerCase();
+
+			if (subcommand === "status") {
+				ctx.ui.notify(statusMessage(runtime), "info");
+				return;
+			}
 
 			if (subcommand === "on" || subcommand === "off") {
 				if (!hasPlanWorkflow(runtime)) {

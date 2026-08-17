@@ -11,6 +11,7 @@ Plan Modeや権限制御は導入せず、ユーザーが`/plan`を実行したP
 /plan Passkey認証を追加し、既存ログインから移行できるようにする
 /plan off
 /plan on
+/plan status
 ```
 
 引数を省略すると、タスクを記入するmulti-line editorが開く。
@@ -19,10 +20,11 @@ Plan Modeや権限制御は導入せず、ユーザーが`/plan`を実行したP
 /plan
 ```
 
-引数全体が`on`または`off`に大文字小文字を問わず一致した場合だけsubcommandとして扱う。
+引数全体が`on`、`off`、`status`のいずれかに大文字小文字を問わず一致した場合だけsubcommandとして扱う。
 
 - `off`: 現在Planを削除せずpauseする
 - `on`: pause中のPlanをresumeする
+- `status`: Dashboardを開かずにON/OFF、revision、現在Step、active/archive件数を表示する
 
 ON/OFFはCustom Entryへ保存され、`session_start`と`session_tree`で現在のPi Session branchから復元される。旧SessionはPlan workflowが存在すればONとして復元する。
 

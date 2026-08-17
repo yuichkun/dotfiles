@@ -148,6 +148,57 @@ test("persists resume before replacing a paused pending request", async () => {
 	assert.equal(runtime.getPendingRequest()?.task, "Replacement task");
 });
 
+test("reports inactive, pending, paused, and active plan status", async () => {
+	const runtime = new PlanRuntime();
+	let command: RegisteredCommand | undefined;
+	const notifications: Array<[string, string]> = [];
+	const pi = {
+		registerCommand: (_name: string, options: RegisteredCommand) => {
+			command = options;
+		},
+	} as unknown as ExtensionAPI;
+	registerPlanCommand(pi, runtime);
+	assert.ok(command);
+	const ctx = {
+		ui: {
+			notify: (message: string, severity: string) => {
+				notifications.push([message, severity]);
+			},
+		},
+	} as unknown as ExtensionCommandContext;
+
+	await command.handler("status", ctx);
+	assert.deepEqual(notifications.pop(), [
+		"Living plan: inactive (no plan on this branch)",
+		"info",
+	]);
+
+	runtime.setRequest({
+		schemaVersion: 1,
+		id: "pending-request",
+		task: "Pending task",
+		createdAt: "2026-01-01T00:00:00.000Z",
+	});
+	await command.handler("STATUS", ctx);
+	assert.deepEqual(notifications.pop(), [
+		"Living plan: ON\nPending request: Pending task",
+		"info",
+	]);
+
+	runtime.applyPlan(TEST_PLAN);
+	runtime.setEnabled(false);
+	await command.handler("status", ctx);
+	const paused = notifications.pop();
+	assert.equal(paused?.[1], "info");
+	assert.match(paused?.[0] ?? "", /^Living plan: OFF \(paused\)$/m);
+	assert.match(paused?.[0] ?? "", /Living Plan実装 · r4/);
+	assert.match(
+		paused?.[0] ?? "",
+		/^Current: S04 — DAGダッシュボードを実装する$/m,
+	);
+	assert.match(paused?.[0] ?? "", /^Active steps: 15 · archived: 0$/m);
+});
+
 test("rejects on/off controls when no plan workflow exists", async () => {
 	const runtime = new PlanRuntime();
 	let command: RegisteredCommand | undefined;
