@@ -1,7 +1,13 @@
-import { buildPlanViews, summarizePlan } from "./plan.ts";
+import {
+	buildPlanViews,
+	summarizeArchiveByPhase,
+	summarizePlan,
+} from "./plan.ts";
 import type { PlanRuntimeState } from "./state.ts";
 
 export type StalenessLevel = 0 | 1 | 2;
+
+const MAX_ARCHIVE_PHASES_IN_CONTEXT = 8;
 
 export function getStalenessLevel(
 	workSinceUpdate: number,
@@ -85,10 +91,52 @@ export function buildPlanContext(
 	}
 
 	if (level >= 2) {
-		lines.push("Synchronize the plan with reality before continuing substantial work:");
-		for (const view of views) {
+		const frontier = views.filter(
+			(view) => view.status !== "done" && view.status !== "superseded",
+		);
+		if (frontier.length > 0) {
+			lines.push("Synchronize the active plan frontier with reality before continuing substantial work:");
+			for (const view of frontier) {
+				lines.push(
+					`${statusGlyph(view.status)} ${view.step.id} [${view.status}] ${view.step.title} <- ${view.step.dependsOn.join(",") || "root"}`,
+				);
+			}
+		} else {
+			lines.push("No unresolved active steps remain.");
+		}
+
+		const archivePhases = summarizeArchiveByPhase(plan.archivedSteps);
+		if (archivePhases.length > 0) {
+			const visiblePhases = archivePhases.slice(
+				0,
+				MAX_ARCHIVE_PHASES_IN_CONTEXT,
+			);
+			const omittedPhases = archivePhases.slice(
+				MAX_ARCHIVE_PHASES_IN_CONTEXT,
+			);
+			const archiveParts = visiblePhases.map(
+				(phase) => `${phase.phase}: ${phase.done + phase.superseded}`,
+			);
+			if (omittedPhases.length > 0) {
+				const omittedSteps = omittedPhases.reduce(
+					(total, phase) => total + phase.done + phase.superseded,
+					0,
+				);
+				const phaseNoun = omittedPhases.length === 1 ? "phase" : "phases";
+				const stepNoun = omittedSteps === 1 ? "step" : "steps";
+				archiveParts.push(
+					`${omittedPhases.length} more ${phaseNoun} (${omittedSteps} ${stepNoun})`,
+				);
+			}
+			lines.push(`Compacted history: ${archiveParts.join(", ")}.`);
+		}
+
+		const resolvedDetailOmitted = views.some(
+			(view) => view.status === "done" || view.status === "superseded",
+		);
+		if (resolvedDetailOmitted || archivePhases.length > 0) {
 			lines.push(
-				`${statusGlyph(view.status)} ${view.step.id} [${view.status}] ${view.step.title} <- ${view.step.dependsOn.join(",") || "root"}`,
+				"Use plan op=\"get\" if the complete current snapshot, including omitted resolved active steps and archive tombstones, is needed for replanning. Full compacted-step details remain in earlier plan tool results.",
 			);
 		}
 	}

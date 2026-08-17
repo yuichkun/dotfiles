@@ -55,7 +55,7 @@ Ready: S05, S06
 
 Step境界では`progress`、前提、Step、順序、依存関係が変わった場合は`set`を使う。通常の更新ではユーザー確認を待たない。要求済み成果物の削除・延期、完了条件の緩和、ユーザーの明示決定との矛盾、完了済み作業の巻き戻しだけは先に確認する。
 
-最後のPlan更新から成功した`edit`、`write`、`bash`が5回、または4 turn経過するとdigestの同期要求を強める。12回または8 turnではcompactな全Step状態も注入する。追加turnや通常Toolのblockは行わない。
+最後のPlan更新から成功した`edit`、`write`、`bash`が5回、または4 turn経過するとdigestの同期要求を強める。12回または8 turnではactive frontier、最大8件のphase別compact件数、残りの集約件数だけを追加注入し、done / supersededのactive Step全件は再掲しない。省略したresolved詳細やarchive tombstoneを含む完全snapshotが必要な場合だけ`plan get`を使う。追加turnや通常Toolのblockは行わない。
 
 ## Plan compaction
 
