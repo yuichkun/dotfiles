@@ -6,6 +6,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { registerPlanCommand } from "./command.ts";
 import {
+	PLAN_CONTROL_CHANGED_EVENT,
 	PLAN_CONTROL_ENTRY,
 	PLAN_REQUEST_ENTRY,
 	PlanRuntime,
@@ -85,16 +86,24 @@ test("pauses and resumes an existing plan without replacing it", async () => {
 	runtime.setEnabled(true);
 	let command: RegisteredCommand | undefined;
 	const entries: Array<{ type: string; data: unknown }> = [];
+	const emitted: Array<{ name: string; data: unknown }> = [];
 	const pi = {
 		registerCommand: (_name: string, options: RegisteredCommand) => {
 			command = options;
 		},
 		appendEntry: (type: string, data: unknown) => entries.push({ type, data }),
+		events: {
+			emit: (name: string, data: unknown) => emitted.push({ name, data }),
+		},
 	} as unknown as ExtensionAPI;
 	registerPlanCommand(pi, runtime);
 	assert.ok(command);
 	const ctx = {
 		waitForIdle: async () => {},
+		sessionManager: {
+			getSessionId: () => "session-1",
+			getLeafId: () => String(entries.length),
+		},
 		ui: { notify: () => {} },
 	} as unknown as ExtensionCommandContext;
 
@@ -112,6 +121,10 @@ test("pauses and resumes an existing plan without replacing it", async () => {
 	assert.equal((entries[0]?.data as { enabled?: boolean }).enabled, false);
 	assert.equal(entries[1]?.type, PLAN_CONTROL_ENTRY);
 	assert.equal((entries[1]?.data as { enabled?: boolean }).enabled, true);
+	assert.deepEqual(emitted.map((event) => event.name), [
+		PLAN_CONTROL_CHANGED_EVENT,
+		PLAN_CONTROL_CHANGED_EVENT,
+	]);
 });
 
 test("persists resume before replacing a paused pending request", async () => {
@@ -125,18 +138,26 @@ test("persists resume before replacing a paused pending request", async () => {
 	runtime.setEnabled(false);
 	let command: RegisteredCommand | undefined;
 	const entries: Array<{ type: string; data: unknown }> = [];
+	const emitted: Array<{ name: string; data: unknown }> = [];
 	const pi = {
 		registerCommand: (_name: string, options: RegisteredCommand) => {
 			command = options;
 		},
 		appendEntry: (type: string, data: unknown) => entries.push({ type, data }),
 		sendUserMessage: () => {},
+		events: {
+			emit: (name: string, data: unknown) => emitted.push({ name, data }),
+		},
 	} as unknown as ExtensionAPI;
 	registerPlanCommand(pi, runtime);
 	assert.ok(command);
 	const ctx = {
 		waitForIdle: async () => {},
 		hasUI: true,
+		sessionManager: {
+			getSessionId: () => "session-1",
+			getLeafId: () => String(entries.length),
+		},
 		ui: { notify: () => {} },
 	} as unknown as ExtensionCommandContext;
 
@@ -146,6 +167,7 @@ test("persists resume before replacing a paused pending request", async () => {
 	assert.equal(entries[1]?.type, PLAN_REQUEST_ENTRY);
 	assert.equal(runtime.isEnabled(), true);
 	assert.equal(runtime.getPendingRequest()?.task, "Replacement task");
+	assert.equal(emitted[0]?.name, PLAN_CONTROL_CHANGED_EVENT);
 });
 
 test("reports inactive, pending, paused, and active plan status", async () => {

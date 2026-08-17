@@ -26,6 +26,8 @@ Plan Modeや権限制御は導入せず、ユーザーが`/plan`を実行したP
 - `on`: pause中のPlanをresumeする
 - `status`: Dashboardを開かずにON/OFF、revision、現在Step、active/archive件数を表示する
 
+同じON/OFF切り替えは`/palette` → `Toggle Living Plan`からも実行できる。
+
 ON/OFFはCustom Entryへ保存され、`session_start`と`session_tree`で現在のPi Session branchから復元される。旧SessionはPlan workflowが存在すればONとして復元する。
 
 OFF中は`plan` Toolとprompt metadata、context注入、staleness counter、fixed progress headerを停止する。DashboardはOFF中も閲覧でき、titleに`PAUSED`を表示する。

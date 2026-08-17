@@ -1,9 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { persistPlanEnabled } from "./control.ts";
 import {
-	PLAN_CONTROL_ENTRY,
 	PLAN_REQUEST_ENTRY,
-	type PlanControl,
 	type PlanRequest,
 	type PlanRuntime,
 } from "./state.ts";
@@ -31,21 +30,6 @@ function statusMessage(runtime: PlanRuntime): string {
 		current ? `Current: ${current.id} — ${current.title}` : "Current: none",
 		`Active steps: ${plan.steps.length} · archived: ${plan.archivedSteps.length}`,
 	].join("\n");
-}
-
-function persistPlanEnabled(
-	pi: ExtensionAPI,
-	runtime: PlanRuntime,
-	enabled: boolean,
-): void {
-	const control: PlanControl = {
-		schemaVersion: 1,
-		id: randomUUID(),
-		enabled,
-		createdAt: new Date().toISOString(),
-	};
-	pi.appendEntry(PLAN_CONTROL_ENTRY, control);
-	runtime.setEnabled(enabled);
 }
 
 export function registerPlanCommand(
@@ -82,7 +66,7 @@ export function registerPlanCommand(
 					);
 					return;
 				}
-				persistPlanEnabled(pi, runtime, enabled);
+				persistPlanEnabled(pi, runtime, ctx, enabled);
 				ctx.ui.notify(
 					enabled
 						? "Living plan resumed. Plan context and tool are active."
@@ -118,7 +102,7 @@ export function registerPlanCommand(
 			if (!task) return;
 
 			if (!runtime.isEnabled() && runtime.getPendingRequest()) {
-				persistPlanEnabled(pi, runtime, true);
+				persistPlanEnabled(pi, runtime, ctx, true);
 			}
 			const request: PlanRequest = {
 				schemaVersion: 1,

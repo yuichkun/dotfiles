@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import {
+	isPlanControlChangedEvent,
 	PLAN_CONTROL_ENTRY,
 	PLAN_REQUEST_ENTRY,
 	PlanRuntime,
@@ -33,6 +34,47 @@ const consultation: PlanConsultation = {
 function entry(value: object): SessionEntry {
 	return value as SessionEntry;
 }
+
+test("validates cross-extension plan control events", () => {
+	const control = {
+		schemaVersion: 1,
+		id: "control-1",
+		enabled: false,
+		createdAt: TEST_PLAN.createdAt,
+	};
+	assert.equal(
+		isPlanControlChangedEvent({
+			sessionId: "session-1",
+			branchLeafId: "leaf-1",
+			control,
+		}),
+		true,
+	);
+	assert.equal(
+		isPlanControlChangedEvent({
+			sessionId: "",
+			branchLeafId: "leaf-1",
+			control,
+		}),
+		false,
+	);
+	assert.equal(
+		isPlanControlChangedEvent({
+			sessionId: "session-1",
+			branchLeafId: "",
+			control,
+		}),
+		false,
+	);
+	assert.equal(
+		isPlanControlChangedEvent({
+			sessionId: "session-1",
+			branchLeafId: "leaf-1",
+			control: { ...control, enabled: "false" },
+		}),
+		false,
+	);
+});
 
 test("restores a branch-local request, consultation, and latest plan", () => {
 	const runtime = new PlanRuntime();

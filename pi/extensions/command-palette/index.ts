@@ -5,7 +5,7 @@ import { CommandPaletteRegistry } from "./registry.ts";
 
 export default function commandPaletteExtension(pi: ExtensionAPI): void {
 	const registry = new CommandPaletteRegistry();
-	registerCommandPaletteActions(registry);
+	registerCommandPaletteActions(pi, registry);
 
 	pi.registerCommand("palette", {
 		description: "Open the local UI command palette",

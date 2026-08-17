@@ -8,6 +8,7 @@ import {
 
 export const PLAN_REQUEST_ENTRY = "living-plan.request";
 export const PLAN_CONTROL_ENTRY = "living-plan.control";
+export const PLAN_CONTROL_CHANGED_EVENT = "living-plan:control-changed";
 export const PLAN_TOOL_NAME = "plan";
 
 export interface PlanRequest {
@@ -22,6 +23,12 @@ export interface PlanControl {
 	id: string;
 	enabled: boolean;
 	createdAt: string;
+}
+
+export interface PlanControlChangedEvent {
+	sessionId: string;
+	branchLeafId: string | null;
+	control: PlanControl;
 }
 
 export interface ObservedFact {
@@ -112,6 +119,17 @@ export function isPlanControl(value: unknown): value is PlanControl {
 		isNonEmptyString(value.id) &&
 		typeof value.enabled === "boolean" &&
 		isIsoTimestamp(value.createdAt)
+	);
+}
+
+export function isPlanControlChangedEvent(
+	value: unknown,
+): value is PlanControlChangedEvent {
+	return (
+		isRecord(value) &&
+		isNonEmptyString(value.sessionId) &&
+		(value.branchLeafId === null || isNonEmptyString(value.branchLeafId)) &&
+		isPlanControl(value.control)
 	);
 }
 

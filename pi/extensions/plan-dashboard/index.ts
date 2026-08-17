@@ -11,7 +11,9 @@ import {
 	type ProgressHeaderState,
 } from "./progress-header.ts";
 import {
+	isPlanControlChangedEvent,
 	isPlanToolDetails,
+	PLAN_CONTROL_CHANGED_EVENT,
 	PLAN_TOOL_NAME,
 	planRuntime,
 	type PlanRuntimeState,
@@ -111,6 +113,15 @@ export default function planDashboardExtension(pi: ExtensionAPI): void {
 	const unsubscribe = planRuntime.subscribe(syncRuntime);
 	registerPlanCommand(pi, planRuntime);
 	registerPlanTool(pi, planRuntime);
+
+	pi.events.on(PLAN_CONTROL_CHANGED_EVENT, (data) => {
+		if (!isPlanControlChangedEvent(data) || !activeContext) return;
+		if (data.sessionId !== activeContext.sessionManager.getSessionId()) return;
+		if (data.branchLeafId !== activeContext.sessionManager.getLeafId()) return;
+		// Event emission is synchronous with the user action. Apply the payload
+		// immediately; the persisted branch entry remains authoritative on restore.
+		planRuntime.setEnabled(data.control.enabled);
+	});
 
 	pi.registerCommand("plan-dashboard", {
 		description: "Open the living plan dashboard",
