@@ -9,7 +9,11 @@ import type {
 import { registerPlanActions } from "../command-palette/actions/plan.ts";
 import { CommandPaletteRegistry } from "../command-palette/registry.ts";
 import planDashboardExtension from "./index.ts";
-import { PLAN_CONTROL_CHANGED_EVENT } from "./state.ts";
+import {
+	PLAN_CONTROL_CHANGED_EVENT,
+	PLAN_REQUEST_CHANGED_EVENT,
+	PLAN_REQUEST_ENTRY,
+} from "./state.ts";
 import { TEST_PLAN } from "./test-fixture.ts";
 
 interface RegisteredCommand {
@@ -215,7 +219,7 @@ test("hides and restores the fixed header with branch pause state", async () => 
 	await handlers.get("session_shutdown")?.({}, ctx);
 });
 
-test("applies command-palette toggles to the active plan extension", async () => {
+test("applies Palette request and activity events to the active plan extension", async () => {
 	const lifecycle = new Map<
 		string,
 		(event: unknown, ctx: ExtensionContext) => Promise<unknown>
@@ -243,6 +247,7 @@ test("applies command-palette toggles to the active plan extension", async () =>
 		appendEntry: (customType: string, data: unknown) => {
 			branch.push(entry({ type: "custom", customType, data }));
 		},
+		sendUserMessage: () => {},
 		getActiveTools: () => activeTools,
 		setActiveTools: (names: string[]) => {
 			activeTools = names;
@@ -257,7 +262,11 @@ test("applies command-palette toggles to the active plan extension", async () =>
 			getSessionId: () => "session-shared",
 			getLeafId: () => String(branch.length),
 		},
-		ui: { notify: () => {} },
+		ui: {
+			notify: () => {},
+			confirm: async () => true,
+			editor: async () => "Replacement Plan",
+		},
 	} as unknown as ExtensionContext;
 	await lifecycle.get("session_start")?.({}, ctx);
 	assert.deepEqual(activeTools, ["read", "plan"]);
@@ -272,6 +281,34 @@ test("applies command-palette toggles to the active plan extension", async () =>
 		},
 	});
 	assert.deepEqual(activeTools, ["read", "plan"]);
+	const contextBeforeForeign = await lifecycle.get("context")?.(
+		{ messages: [] },
+		ctx,
+	) as { messages?: Array<{ content?: string }> } | undefined;
+	const foreignRequest = {
+		schemaVersion: 1,
+		id: "request-foreign",
+		task: "Foreign Plan",
+		createdAt: TEST_PLAN.createdAt,
+	};
+	pi.events.emit(PLAN_REQUEST_CHANGED_EVENT, {
+		sessionId: "another-session",
+		branchLeafId: ctx.sessionManager.getLeafId(),
+		request: foreignRequest,
+	});
+	pi.events.emit(PLAN_REQUEST_CHANGED_EVENT, {
+		sessionId: "session-shared",
+		branchLeafId: "another-branch",
+		request: foreignRequest,
+	});
+	const contextAfterForeign = await lifecycle.get("context")?.(
+		{ messages: [] },
+		ctx,
+	) as { messages?: Array<{ content?: string }> } | undefined;
+	assert.equal(
+		contextAfterForeign?.messages?.[0]?.content,
+		contextBeforeForeign?.messages?.[0]?.content,
+	);
 
 	const registry = new CommandPaletteRegistry();
 	registerPlanActions(pi, registry);
@@ -279,5 +316,15 @@ test("applies command-palette toggles to the active plan extension", async () =>
 	assert.deepEqual(activeTools, ["read"]);
 	await registry.get("plan.toggle")?.run(ctx);
 	assert.deepEqual(activeTools, ["read", "plan"]);
+	await registry.get("plan.start")?.run(ctx);
+	assert.deepEqual(activeTools, ["read", "plan"]);
+	assert.equal(
+		(branch.at(-1) as { customType?: string }).customType,
+		PLAN_REQUEST_ENTRY,
+	);
+	const injected = await lifecycle.get("context")?.({ messages: [] }, ctx) as {
+		messages?: Array<{ content?: string }>;
+	} | undefined;
+	assert.match(injected?.messages?.[0]?.content ?? "", /Replacement Plan/);
 	await lifecycle.get("session_shutdown")?.({}, ctx);
 });

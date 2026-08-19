@@ -12,8 +12,10 @@ import {
 } from "./progress-header.ts";
 import {
 	isPlanControlChangedEvent,
+	isPlanRequestChangedEvent,
 	isPlanToolDetails,
 	PLAN_CONTROL_CHANGED_EVENT,
+	PLAN_REQUEST_CHANGED_EVENT,
 	PLAN_TOOL_NAME,
 	planRuntime,
 	type PlanRuntimeState,
@@ -113,6 +115,13 @@ export default function planDashboardExtension(pi: ExtensionAPI): void {
 	const unsubscribe = planRuntime.subscribe(syncRuntime);
 	registerPlanCommand(pi, planRuntime);
 	registerPlanTool(pi, planRuntime);
+
+	pi.events.on(PLAN_REQUEST_CHANGED_EVENT, (data) => {
+		if (!isPlanRequestChangedEvent(data) || !activeContext) return;
+		if (data.sessionId !== activeContext.sessionManager.getSessionId()) return;
+		if (data.branchLeafId !== activeContext.sessionManager.getLeafId()) return;
+		planRuntime.setRequest(data.request);
+	});
 
 	pi.events.on(PLAN_CONTROL_CHANGED_EVENT, (data) => {
 		if (!isPlanControlChangedEvent(data) || !activeContext) return;

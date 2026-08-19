@@ -3,8 +3,10 @@ import test from "node:test";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import {
 	isPlanControlChangedEvent,
+	isPlanRequestChangedEvent,
 	PLAN_CONTROL_ENTRY,
 	PLAN_REQUEST_ENTRY,
+	planHasUnfinishedWork,
 	PlanRuntime,
 	type PlanConsultation,
 	type PlanRequest,
@@ -70,7 +72,40 @@ function entry(value: object): SessionEntry {
 	return value as SessionEntry;
 }
 
-test("validates cross-extension plan control events", () => {
+test("validates cross-extension Plan request and control events", () => {
+	assert.equal(
+		isPlanRequestChangedEvent({
+			sessionId: "session-1",
+			branchLeafId: "leaf-1",
+			request,
+		}),
+		true,
+	);
+	assert.equal(
+		isPlanRequestChangedEvent({
+			sessionId: "session-1",
+			branchLeafId: null,
+			request,
+		}),
+		true,
+	);
+	assert.equal(
+		isPlanRequestChangedEvent({
+			sessionId: "session-1",
+			branchLeafId: "",
+			request,
+		}),
+		false,
+	);
+	assert.equal(
+		isPlanRequestChangedEvent({
+			sessionId: "session-1",
+			branchLeafId: "leaf-1",
+			request: { ...request, task: "" },
+		}),
+		false,
+	);
+
 	const control = {
 		schemaVersion: 1,
 		id: "control-1",
@@ -276,6 +311,67 @@ test("keeps the previous plan in history while a new request is pending", () => 
 	runtime.applyPlan(SECOND_PLAN);
 	assert.equal(runtime.getPlan()?.id, SECOND_PLAN.id);
 	assert.equal(runtime.getPlanHistory()[0]?.id, TEST_PLAN.id);
+});
+
+test("restores a Palette replacement as pending with the prior Plan in history", () => {
+	const runtime = new PlanRuntime();
+	runtime.restore([
+		entry({
+			type: "custom",
+			customType: PLAN_REQUEST_ENTRY,
+			data: request,
+		}),
+		entry({
+			type: "message",
+			message: {
+				role: "toolResult",
+				toolName: "plan",
+				details: { kind: "plan", operation: "set", plan: TEST_PLAN },
+				isError: false,
+			},
+		}),
+		entry({
+			type: "custom",
+			customType: PLAN_CONTROL_ENTRY,
+			data: {
+				schemaVersion: 1,
+				id: "control-replacement",
+				enabled: true,
+				createdAt: TEST_PLAN.createdAt,
+			},
+		}),
+		entry({
+			type: "custom",
+			customType: PLAN_REQUEST_ENTRY,
+			data: secondRequest,
+		}),
+	]);
+
+	assert.equal(runtime.getPlan(), undefined);
+	assert.equal(runtime.getPendingRequest()?.id, secondRequest.id);
+	assert.equal(runtime.getPlanHistory()[0]?.id, TEST_PLAN.id);
+	assert.equal(runtime.isEnabled(), true);
+});
+
+test("detects unfinished work without treating terminal Plans as unfinished", () => {
+	const completed = {
+		...TEST_PLAN,
+		steps: TEST_PLAN.steps.map((step) => ({
+			...step,
+			status: "done" as const,
+		})),
+	};
+	const superseded = {
+		...TEST_PLAN,
+		steps: TEST_PLAN.steps.map((step) => ({
+			...step,
+			status: "superseded" as const,
+		})),
+	};
+
+	assert.equal(planHasUnfinishedWork(TEST_PLAN), true);
+	assert.equal(planHasUnfinishedWork(completed), false);
+	assert.equal(planHasUnfinishedWork(superseded), false);
 });
 
 test("never displays an invalid latest snapshot as plausible progress", () => {

@@ -8,6 +8,7 @@ import {
 
 export const PLAN_REQUEST_ENTRY = "living-plan.request";
 export const PLAN_CONTROL_ENTRY = "living-plan.control";
+export const PLAN_REQUEST_CHANGED_EVENT = "living-plan:request-changed";
 export const PLAN_CONTROL_CHANGED_EVENT = "living-plan:control-changed";
 export const PLAN_TOOL_NAME = "plan";
 
@@ -23,6 +24,12 @@ export interface PlanControl {
 	id: string;
 	enabled: boolean;
 	createdAt: string;
+}
+
+export interface PlanRequestChangedEvent {
+	sessionId: string;
+	branchLeafId: string | null;
+	request: PlanRequest;
 }
 
 export interface PlanControlChangedEvent {
@@ -92,6 +99,12 @@ function prependHistory(history: readonly Plan[], plan: Plan): Plan[] {
 	return [plan, ...history];
 }
 
+export function planHasUnfinishedWork(plan: Plan): boolean {
+	return plan.steps.some(
+		(step) => step.status !== "done" && step.status !== "superseded",
+	);
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null;
 }
@@ -127,6 +140,17 @@ export function isPlanControl(value: unknown): value is PlanControl {
 		isNonEmptyString(value.id) &&
 		typeof value.enabled === "boolean" &&
 		isIsoTimestamp(value.createdAt)
+	);
+}
+
+export function isPlanRequestChangedEvent(
+	value: unknown,
+): value is PlanRequestChangedEvent {
+	return (
+		isRecord(value) &&
+		isNonEmptyString(value.sessionId) &&
+		(value.branchLeafId === null || isNonEmptyString(value.branchLeafId)) &&
+		isPlanRequest(value.request)
 	);
 }
 
