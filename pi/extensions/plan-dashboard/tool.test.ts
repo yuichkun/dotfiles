@@ -415,7 +415,7 @@ test("rejects tool execution while the plan is paused", async () => {
 	runtime.setEnabled(false);
 	await assert.rejects(
 		tool.execute("get", { op: "get" }, undefined, undefined, context),
-		/living plan is inactive/,
+		/full plan tool is inactive/,
 	);
 });
 
@@ -423,7 +423,7 @@ test("rejects execution outside a plan workflow", async () => {
 	const { tool } = setup(false);
 	await assert.rejects(
 		tool.execute("get", { op: "get" }, undefined, undefined, context),
-		/living plan is inactive/,
+		/full plan tool is inactive/,
 	);
 });
 

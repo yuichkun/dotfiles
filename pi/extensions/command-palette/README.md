@@ -12,7 +12,7 @@ Pi内の決定的なローカルUI操作を、対話・prompt・skillとは別�
 - `Pause Living Plan` / `Resume Living Plan`：Plan workflowが存在するとき、現在状態に合う片方だけを表示する
 - `Open in VS Code…`：独立したWorkspace Pickerを開き、現在または別のWorkspaceを選択する
 
-Actionは`isAvailable`で現在contextに不要な項目を非表示にできる。
+Plan専用slash commandは登録せず、明示的なPlan操作はPaletteへ集約する。Actionは`isAvailable`で現在contextに不要な項目を非表示にできる。
 
 ## Actionの追加
 

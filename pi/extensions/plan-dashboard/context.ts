@@ -22,7 +22,7 @@ function pendingRequestContext(state: Readonly<PlanRuntimeState>): string | unde
 	const request = state.request;
 	if (!request || state.plan?.requestId === request.id) return undefined;
 	return `<plan-workflow>
-The user explicitly invoked /plan for the request below. Complete this one-shot planning workflow; this is not a persistent mode.
+The user explicitly requested a Living Plan through the Command Palette or start_plan for the task below. Complete this one-shot planning workflow; this is not a persistent mode.
 
 Request ID: ${request.id}
 Raw request:

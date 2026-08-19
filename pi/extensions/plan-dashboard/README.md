@@ -1,40 +1,27 @@
 # Living Plan
 
 Pi 0.84.0のSessionへ、依存関係付きのLiving Planを保存・復元・表示するExtension。
-Plan Modeや権限制御は導入せず、ユーザーが`/plan`を実行したPi Session branchだけでPlanを継続管理する。Plan workflowがない通常Sessionでは`plan` Toolをinactiveにし、system promptへの追加コストを発生させない。
+Plan専用slash commandは登録しない。明示操作はCommand Palette、自然言語のplanning依頼は内部`start_plan` Toolへ分離する。通常Sessionでは軽量な`start_plan`だけをactiveにし、Plan workflow中だけfull `plan` Toolと継続contextを有効化する。
 
-## Planの作成とON/OFF
+## Planの作成と管理
 
-タスクを引数としてワンショットWorkflowを起動する。
+`/palette`から、現在状態で利用可能なActionだけを表示する。
 
-```text
-/plan Passkey認証を追加し、既存ログインから移行できるようにする
-/plan off
-/plan on
-/plan status
-```
+- `Start New Living Plan…`: task editorから新しいPlanRequestを開始する
+- `Open Current Plan…`: current PlanのDashboardを開く
+- `Open Plan History…`: 同じbranchの過去Planを選んでread-only表示する
+- `Pause Living Plan`: activeなPlan workflowをpauseする
+- `Resume Living Plan`: pausedなPlan workflowをresumeする
 
-引数を省略すると、タスクを記入するmulti-line editorが開く。
+新規作成時、current Planが完了済みなら確認なしでhistoryへ移す。未完了Planまたはpending requestがある場合だけ確認し、承認後も旧Plan snapshotはhistoryへ残す。
 
-```text
-/plan
-```
+Agentは「実装前にplan立てて」のような明示的な自然言語依頼を受けた場合、内部`start_plan` Toolから同じworkflowを開始できる。通常の実装依頼や相談からplanning modeを推測してはならず、未完了PlanをAgent判断だけで置換しない。
 
-引数全体が`on`、`off`、`status`のいずれかに大文字小文字を問わず一致した場合だけsubcommandとして扱う。
-
-- `off`: 現在Planを削除せずpauseする
-- `on`: pause中のPlanをresumeする
-- `status`: Dashboardを開かずにON/OFF、revision、現在Step、active/archive件数を表示する
-
-同じPause/Resume操作は`/palette` → `Pause Living Plan` / `Resume Living Plan`からも実行できる。
-
-ON/OFFはCustom Entryへ保存され、`session_start`と`session_tree`で現在のPi Session branchから復元される。旧SessionはPlan workflowが存在すればONとして復元する。
-
-OFF中は`plan` Toolとprompt metadata、context注入、staleness counter、fixed progress headerを停止する。DashboardはOFF中も閲覧でき、titleに`PAUSED`を表示する。
+pause/resume状態はCustom Entryへ保存され、`session_start`と`session_tree`で現在のPi Session branchから復元される。pause中はfull `plan` Tool、継続context、staleness counter、fixed progress headerを停止する。Dashboardと軽量`start_plan`は利用可能だが、`start_plan`は未完了Planを置換しない。未完了Planもpending requestもないpaused branchで明示的に`start_plan`を実行した場合は、新しいworkflowを開始するためbranchをresumeする。
 
 ### 初回Workflow
 
-1. `/plan`がPlan Toolを有効化し、タスクを通常のUser MessageとしてSessionへ追加する。
+1. Paletteの`Start New Living Plan…`または明示的な自然言語依頼を受けた`start_plan`がPlanRequestを保存し、full `plan` Toolを有効化する。
 2. Agentが要求とコードベースを調査する。
 3. 通常のタスクでは、Agentが`set` operationで依存関係付きPlanを直接保存する。Fable consultationは必要ない。
 4. 難しい、曖昧、高リスクで、独立した視点が実質的に役立つ場合だけ`consult`を使う。ユーザーが不要と指定した場合は呼ばない。
@@ -50,7 +37,7 @@ claude -p --model fable --effort max --safe-mode --tools "" --no-session-persist
 
 ## 継続更新
 
-PlanがONの場合だけ、Piの`context` eventで毎回のLLM callへ最新digestを追加する。
+Plan workflowがactiveの場合だけ、Piの`context` eventで毎回のLLM callへ最新digestを追加する。
 
 ```text
 Plan <id> r7
@@ -89,7 +76,7 @@ Plan schema v2は、実行対象の`steps`と、解決済みIDを保持する`ar
 
 ## 保存とbranch
 
-Plan作成要求とON/OFFはCustom Entry、Fable consultationとPlan snapshotは`plan` Tool Resultの`details`へ保存する。各Plan変更はrevision、理由、完全snapshotを持つ。
+Plan作成要求とpause/resume状態はCustom Entry、Fable consultationとPlan snapshotは`plan` Tool Resultの`details`へ保存する。各Plan変更はrevision、理由、完全snapshotを持つ。PlanRequest境界ごとの最新snapshotをcurrentまたはhistoryとしてbranchから導出する。
 
 `session_start`と`session_tree`で現在の`getBranch()`だけを走査するため、rewindや兄弟のPi Session branchはそれぞれ異なるPlan、pause状態、進捗を保持できる。別Sessionへは自動継承しない。
 
@@ -97,11 +84,10 @@ Plan作成要求とON/OFFはCustom Entry、Fable consultationとPlan snapshotは
 
 - `/palette` → `Open Current Plan…`
 - `/palette` → `Open Plan History…`
-- `/plan-dashboard`
 
 `Open Plan History…`は同じbranchの過去Planをnewest-firstで選択し、`HISTORY` marker付きのread-only Dashboardで表示する。History表示はcurrent Plan、pause状態、active toolを変更しない。
 
-画面最上部のfixed Overlayにはprogress barと現在Stepを表示する。Planがない、またはOFFのPi Session branchではOverlayを表示しない。staleness thresholdを超えた場合は、最後の更新以降のwork/turn数を表示する。
+画面最上部のfixed Overlayにはprogress barと現在Stepを表示する。Planがない、またはpausedのPi Session branchではOverlayを表示しない。staleness thresholdを超えた場合は、最後の更新以降のwork/turn数を表示する。
 
 ### Overview
 

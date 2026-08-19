@@ -161,11 +161,11 @@ export function registerPlanTool(
 		name: PLAN_TOOL_NAME,
 		label: "Plan",
 		description:
-			"Create and maintain the living plan explicitly requested with /plan. Do not create a plan unless a /plan request is pending. Consultation is optional: use consult only for genuinely difficult, ambiguous, or high-risk planning where independent Fable advice materially helps; never treat it as an approval gate. get returns the complete current snapshot; set creates or fully replaces the active structure (omitted existing steps become superseded); progress atomically completes the current step and/or starts a ready step; compact archives every resolved active step while retaining dependency tombstones. Large mutations may also compact automatically. Archived step IDs must not be reintroduced by set; use get after compaction when the active snapshot is unclear.",
+			"Create and maintain a Living Plan from an explicit PlanRequest created by the Command Palette or start_plan. Do not create a plan unless a PlanRequest is pending. Consultation is optional: use consult only for genuinely difficult, ambiguous, or high-risk planning where independent Fable advice materially helps; never treat it as an approval gate. get returns the complete current snapshot; set creates or fully replaces the active structure (omitted existing steps become superseded); progress atomically completes the current step and/or starts a ready step; compact archives every resolved active step while retaining dependency tombstones. Large mutations may also compact automatically. Archived step IDs must not be reintroduced by set; use get after compaction when the active snapshot is unclear.",
 		promptSnippet:
 			"Create and update an explicitly requested living plan",
 		promptGuidelines: [
-			"Use plan only when a /plan workflow is pending or a living plan already exists; never create a plan automatically for an ordinary session.",
+			"Use plan only when an explicit PlanRequest is pending or a Living Plan already exists; never create a plan automatically for an ordinary session.",
 			"Fable consultation is optional. Use consult only for genuinely difficult, ambiguous, or high-risk planning; do not consult for routine work or when the user asks you not to.",
 			"When a living plan exists, use plan at step boundaries and revise it proactively when reality changes instead of waiting for the user to ask.",
 			"After plan compaction, never include archived step IDs in a later plan set operation; use plan get first when the active snapshot is unclear.",
@@ -177,7 +177,7 @@ export function registerPlanTool(
 		async execute(_toolCallId, params, signal, _onUpdate) {
 			if (!runtime.isEnabled()) {
 				throw new Error(
-					"The living plan is inactive on this Pi session branch. Use /plan on to resume it or /plan <task> to start one.",
+					"The full plan tool is inactive on this branch. Use Command Palette → Resume Living Plan or Start New Living Plan…, or explicitly ask the Agent to create a plan.",
 				);
 			}
 			switch (params.op) {
@@ -200,7 +200,7 @@ export function registerPlanTool(
 					const request = runtime.getState().request;
 					if (!request || request.id !== params.requestId) {
 						throw new Error(
-							`Unknown plan request ${params.requestId}. Invoke /plan with the task first.`,
+							`Unknown PlanRequest ${params.requestId}. Start a Plan from the Command Palette or an explicit natural-language request first.`,
 						);
 					}
 					const facts = params.facts.map(normalizeFact);
@@ -246,11 +246,11 @@ export function registerPlanTool(
 					const current = runtime.getPlan();
 					const request = runtime.getState().request;
 					if (!request) {
-						throw new Error("No /plan request exists in this session branch");
+						throw new Error("No PlanRequest exists in this session branch");
 					}
 					if (current && current.requestId !== request.id) {
 						throw new Error(
-							"The current plan and latest /plan request belong to different branch histories",
+							"The current Plan and latest PlanRequest belong to different branch histories",
 						);
 					}
 					const consultationId =

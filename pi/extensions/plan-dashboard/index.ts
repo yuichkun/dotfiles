@@ -3,9 +3,8 @@ import type {
 	ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import type { OverlayHandle } from "@earendil-works/pi-tui";
-import { registerPlanCommand } from "./command.ts";
+import { registerPlanBootstrapTool } from "./bootstrap.ts";
 import { buildPlanContext } from "./context.ts";
-import { openPlanDashboard } from "./dashboard.ts";
 import {
 	PlanProgressHeader,
 	type ProgressHeaderState,
@@ -113,7 +112,7 @@ export default function planDashboardExtension(pi: ExtensionAPI): void {
 	};
 
 	const unsubscribe = planRuntime.subscribe(syncRuntime);
-	registerPlanCommand(pi, planRuntime);
+	registerPlanBootstrapTool(pi, planRuntime);
 	registerPlanTool(pi, planRuntime);
 
 	pi.events.on(PLAN_REQUEST_CHANGED_EVENT, (data) => {
@@ -130,19 +129,6 @@ export default function planDashboardExtension(pi: ExtensionAPI): void {
 		// Event emission is synchronous with the user action. Apply the payload
 		// immediately; the persisted branch entry remains authoritative on restore.
 		planRuntime.setEnabled(data.control.enabled);
-	});
-
-	pi.registerCommand("plan-dashboard", {
-		description: "Open the living plan dashboard",
-		handler: async (_args, ctx) => {
-			try {
-				await openPlanDashboard(ctx);
-			} catch (error) {
-				const message =
-					error instanceof Error ? error.message : String(error);
-				ctx.ui.notify(`Plan Dashboard failed: ${message}`, "error");
-			}
-		},
 	});
 
 	pi.on("session_start", async (_event, ctx) => {

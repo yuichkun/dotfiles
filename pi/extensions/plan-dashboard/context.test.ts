@@ -24,7 +24,8 @@ test("injects direct planning with optional consultation for an explicit request
 		workSinceUpdate: 0,
 		turnsSinceUpdate: 0,
 	});
-	assert.match(context ?? "", /explicitly invoked \/plan/);
+	assert.match(context ?? "", /explicitly requested a Living Plan/);
+	assert.match(context ?? "", /Command Palette or start_plan/);
 	assert.match(context ?? "", /Request ID: request-1/);
 	assert.match(context ?? "", /Implement passkeys/);
 	assert.match(context ?? "", /no consultation is required/);
