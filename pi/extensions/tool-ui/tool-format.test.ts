@@ -37,7 +37,7 @@ test("maps built-in tools to Claude-style signatures", () => {
 	);
 });
 
-test("keeps deterministic edit facts, semantic summary, and duration", () => {
+test("hides edit counts and duration behind the semantic summary", () => {
 	assert.deepEqual(
 		getBranchParts({
 			toolName: "edit",
@@ -46,7 +46,56 @@ test("keeps deterministic edit facts, semantic summary, and duration", () => {
 			semanticSummary: "型定義を修正しました",
 			status: "success",
 		}),
-		["Added 1 line, removed 3 lines", "型定義を修正しました", "0.3s"],
+		["型定義を修正しました"],
+	);
+});
+
+test("restores low-value facts and duration for expanded headers", () => {
+	assert.deepEqual(
+		getBranchParts({
+			toolName: "read",
+			args: { path: "src/index.ts" },
+			facts: ["read", "src/index.ts", "42 lines", "0.3s"],
+			semanticSummary: "実装を確認しました",
+			status: "success",
+			includeLowValueFacts: true,
+		}),
+		["Read 42 lines", "実装を確認しました", "0.3s"],
+	);
+	assert.deepEqual(
+		getBranchParts({
+			toolName: "edit",
+			args: { path: "src/index.ts" },
+			facts: ["edit", "src/index.ts", "+1 / -3", "0.4s"],
+			semanticSummary: "型定義を修正しました",
+			status: "success",
+			includeLowValueFacts: true,
+		}),
+		["Added 1 line, removed 3 lines", "型定義を修正しました", "0.4s"],
+	);
+});
+
+test("hides long durations collapsed and restores them expanded", () => {
+	assert.deepEqual(
+		getBranchParts({
+			toolName: "read",
+			args: { path: "src/index.ts" },
+			facts: ["read", "src/index.ts", "90s"],
+			semanticSummary: "実装を確認しました",
+			status: "success",
+		}),
+		["実装を確認しました"],
+	);
+	assert.deepEqual(
+		getBranchParts({
+			toolName: "read",
+			args: { path: "src/index.ts" },
+			facts: ["read", "src/index.ts", "90s"],
+			semanticSummary: "実装を確認しました",
+			status: "success",
+			includeLowValueFacts: true,
+		}),
+		["実装を確認しました", "90s"],
 	);
 });
 
@@ -63,7 +112,7 @@ test("keeps live summarizing state alongside semantic purpose", () => {
 	);
 });
 
-test("uses Claude-style shell activity wording and keeps result facts", () => {
+test("keeps Bash outcome facts and purpose while removing shell boilerplate", () => {
 	assert.deepEqual(
 		getBranchParts({
 			toolName: "bash",
@@ -72,7 +121,7 @@ test("uses Claude-style shell activity wording and keeps result facts", () => {
 			semanticSummary: "Tool UIの回帰テストを実行しました",
 			status: "success",
 		}),
-		["Ran 1 shell command", "8 tests passed", "Tool UIの回帰テストを実行しました", "1.5s"],
+		["8 tests passed", "Tool UIの回帰テストを実行しました"],
 	);
 });
 
@@ -85,7 +134,7 @@ test("suppresses deterministic fallback summaries that repeat signature argument
 			semanticSummary: "src/index.tsを確認しました",
 			status: "success",
 		}),
-		["Read 42 lines"],
+		[],
 	);
 	assert.deepEqual(
 		getBranchParts({
@@ -95,7 +144,7 @@ test("suppresses deterministic fallback summaries that repeat signature argument
 			semanticSummary: "testsが完了しました",
 			status: "success",
 		}),
-		["Ran 1 shell command", "8 tests passed"],
+		["8 tests passed"],
 	);
 });
 
@@ -108,7 +157,60 @@ test("keeps deterministic Bash facts and generated purpose prose", () => {
 			semanticSummary: "Tool UIの回帰を防ぐため、testsを実行しました",
 			status: "success",
 		}),
-		["Ran 1 shell command", "8 tests passed", "Tool UIの回帰を防ぐため、testsを実行しました"],
+		["8 tests passed", "Tool UIの回帰を防ぐため、testsを実行しました"],
+	);
+});
+
+test("removes generic positive counts but preserves no-match outcomes", () => {
+	for (const testCase of [
+		{ toolName: "write", args: { path: "src/new.ts" }, facts: ["write", "src/new.ts", "42 lines"] },
+		{ toolName: "grep", args: {}, facts: ["grep", "12 result lines"] },
+		{ toolName: "find", args: {}, facts: ["find", "12 files"] },
+		{ toolName: "ls", args: { path: "src" }, facts: ["ls", "src", "12 entries"] },
+	]) {
+		assert.deepEqual(
+			getBranchParts({
+				...testCase,
+				semanticSummary: "目的の処理を完了しました",
+				status: "success",
+			}),
+			["目的の処理を完了しました"],
+		);
+	}
+	for (const testCase of [
+		{
+			toolName: "find",
+			args: { pattern: "*.ts", path: "src" },
+			facts: ["find", "0 files"],
+		},
+		{
+			toolName: "ls",
+			args: { path: "src" },
+			facts: ["ls", "src", "0 entries"],
+		},
+	]) {
+		assert.deepEqual(
+			getBranchParts({
+				...testCase,
+				semanticSummary: "対象を確認しました",
+				status: "success",
+			}),
+			["No matches", "対象を確認しました"],
+		);
+	}
+});
+
+test("keeps truncated and error details while collapsed", () => {
+	assert.deepEqual(
+		getBranchParts({
+			toolName: "edit",
+			args: { path: "src/index.ts" },
+			facts: ["edit", "src/index.ts", "+2 / -1", "truncated", "0.4s"],
+			semanticSummary: "更新内容を確認しました",
+			status: "error",
+			errorTail: "write failed",
+		}),
+		["Error: write failed", "truncated", "更新内容を確認しました"],
 	);
 });
 
@@ -125,15 +227,15 @@ test("keeps a semantic summary when a custom Tool has no deterministic fact", ()
 	);
 });
 
-test("suppresses a semantic summary that exactly repeats a fact", () => {
+test("suppresses a semantic summary that exactly repeats a high-value fact", () => {
 	assert.deepEqual(
 		getBranchParts({
-			toolName: "find",
-			args: { pattern: "*.ts", path: "src" },
-			facts: ["find", "“*.ts”", "12 files"],
-			semanticSummary: "12 files",
+			toolName: "grep",
+			args: { pattern: "TODO", path: "src" },
+			facts: ["grep", "no matches"],
+			semanticSummary: "No matches",
 			status: "success",
 		}),
-		["12 files"],
+		["No matches"],
 	);
 });

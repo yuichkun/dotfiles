@@ -67,7 +67,7 @@ function loadThemeThroughPublicContract(): Theme {
 	);
 }
 
-test("renders a Claude-style anchor and indented branch", () => {
+test("renders a compact anchor and branch without duration", () => {
 	const component = new ToolHeaderComponent({
 		toolName: "edit",
 		args: { path: "src/index.ts" },
@@ -81,7 +81,26 @@ test("renders a Claude-style anchor and indented branch", () => {
 
 	assert.deepEqual(component.render(100), [
 		"⏺ Update(src/index.ts)",
-		"  ⎿ \u00a0Added 1 line, removed 3 lines · 型定義を修正しました · 0.3s",
+		"  ⎿ \u00a0型定義を修正しました",
+	]);
+});
+
+test("restores generic facts and duration when expanded", () => {
+	const component = new ToolHeaderComponent({
+		toolName: "read",
+		args: { path: "src/index.ts" },
+		status: "success",
+		marker: "⏺",
+		markerColor: "success",
+		semanticSummary: "実装を確認しました",
+		facts: ["read", "src/index.ts", "42 lines", "0.4s"],
+		includeLowValueFacts: true,
+		theme: plainTheme,
+	});
+
+	assert.deepEqual(component.render(100), [
+		"⏺ Read(src/index.ts)",
+		"  ⎿ \u00a0Read 42 lines · 実装を確認しました · 0.4s",
 	]);
 });
 
@@ -122,7 +141,7 @@ test("keeps semantic summaries primary when no deterministic fact exists", () =>
 	assert.ok(!rendered.includes(`<success>${semanticSummary}</success>`));
 });
 
-test("keeps edit counts neutral while reserving warning for real caution", () => {
+test("keeps expanded edit counts neutral while reserving warning for real caution", () => {
 	const component = new ToolHeaderComponent({
 		toolName: "edit",
 		args: { path: "src/index.ts" },
@@ -131,6 +150,7 @@ test("keeps edit counts neutral while reserving warning for real caution", () =>
 		markerColor: "success",
 		semanticSummary: "更新しました",
 		facts: ["edit", "src/index.ts", "+2 / -1", "truncated", "0.4s"],
+		includeLowValueFacts: true,
 		theme: tokenTheme,
 	});
 	const rendered = component.render(200).join("\n");
@@ -249,15 +269,15 @@ test("matches Claude source ANSI through public Theme and hyperlink contracts", 
 		);
 		assert.equal(
 			stripTerminalSequences(branch!),
-			"  ⎿ \u00a0Added 1 line, removed 1 line · generated prose is intentionally hidden · 0.4s",
+			"  ⎿ \u00a0generated prose is intentionally hidden",
 		);
 		assert.match(anchor!, /^\u001b\[38;2;78;186;101m⏺\u001b\[39m /);
 		assert.match(
 			anchor!,
 			/\u001b\]8;;file:\/\/\/Users\/yuichkun\/workspace\/unworklet\/packages\/core\/src\/types\.ts\u001b\\/,
 		);
-		assert.match(branch!, /^\u001b\[38;2;153;153;153m  ⎿ \u00a0\u001b\[39mAdded /);
-		assert.match(branch!, /\u001b\[38;2;117;113;94m0\.4s\u001b\[39m$/);
+		assert.match(branch!, /^\u001b\[38;2;153;153;153m  ⎿ \u00a0\u001b\[39m/);
+		assert.doesNotMatch(branch!, /Added|0\.4s/);
 		assert.ok(!anchor!.includes("\u001b[4m"));
 	} finally {
 		setCapabilities(previous);

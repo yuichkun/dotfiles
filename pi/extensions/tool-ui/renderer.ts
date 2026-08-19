@@ -204,6 +204,7 @@ function renderExpandedCall(options: {
 			markerColor: options.started ? "accent" : "dim",
 			semanticSummary: options.summary,
 			facts: withBatchFact(options.facts, options.batch),
+			includeLowValueFacts: true,
 			runningDuration: options.started
 				? formatRunningDuration(options.startedAt)
 				: undefined,
@@ -249,6 +250,7 @@ function renderExpandedResult(options: {
 			facts: withBatchFact(options.facts, options.batch),
 			errorTail: options.errorTail,
 			summaryError: options.summaryError,
+			includeLowValueFacts: true,
 			cwd: options.context.cwd,
 			theme: options.theme,
 		}),
@@ -333,9 +335,6 @@ export function withCompactRenderer(
 				markerColor: context.executionStarted ? "accent" : "dim",
 				semanticSummary: semantic.running,
 				facts,
-				runningDuration: context.executionStarted
-					? formatRunningDuration(state.startedAt)
-					: undefined,
 				cwd: context.cwd,
 				theme,
 			});

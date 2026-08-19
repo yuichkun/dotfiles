@@ -108,6 +108,17 @@ function countLabel(count: string): string {
 	return Number(count) === 1 ? "line" : "lines";
 }
 
+function isLowValueFact(toolName: string, fact: string): boolean {
+	if (toolName === "read" || toolName === "write") return /^\d+ lines$/.test(fact);
+	if (toolName === "grep") return /^\d+ result lines$/.test(fact);
+	if (toolName === "find") return /^[1-9]\d* files$/.test(fact);
+	if (toolName === "ls") return /^[1-9]\d* entries$/.test(fact);
+	if (toolName === "edit") {
+		return /^\d+ replacements$/.test(fact) || /^\+\d+\s*\/\s*-\d+$/.test(fact);
+	}
+	return false;
+}
+
 function humanizeFact(toolName: string, fact: string): string {
 	const diff = fact.match(/^\+(\d+)\s*\/\s*-(\d+)$/);
 	if (diff) {
@@ -120,7 +131,13 @@ function humanizeFact(toolName: string, fact: string): string {
 		if (toolName === "write") return `Wrote ${lines[1]} ${countLabel(lines[1]!)}`;
 	}
 
-	if (fact === "no matches") return "No matches";
+	if (
+		fact === "no matches" ||
+		(toolName === "find" && fact === "0 files") ||
+		(toolName === "ls" && fact === "0 entries")
+	) {
+		return "No matches";
+	}
 	return fact;
 }
 
@@ -187,12 +204,17 @@ export function getBranchParts(options: {
 	semanticSummary: string;
 	status: ToolDisplayStatus;
 	errorTail?: string;
+	includeLowValueFacts?: boolean;
 }): string[] {
 	const signature = getToolSignature(options.toolName, options.args);
 	const parts: string[] = [];
 
 	if (options.errorTail) parts.push(`Error: ${singleLine(options.errorTail)}`);
-	if (options.toolName === "bash" && options.status === "success") {
+	if (
+		options.includeLowValueFacts &&
+		options.toolName === "bash" &&
+		options.status === "success"
+	) {
 		parts.push("Ran 1 shell command");
 	} else if (options.toolName === "bash" && options.status === "error" && !options.errorTail) {
 		parts.push("Shell command failed");
@@ -203,11 +225,12 @@ export function getBranchParts(options: {
 		if (fact === options.toolName || fact === "completed") continue;
 		if (/^running\s+\d/.test(fact)) continue;
 		if (/^\d+(?:\.\d+)?s$/.test(fact)) {
-			duration = fact;
+			duration = options.includeLowValueFacts ? fact : undefined;
 			continue;
 		}
 		if (isSignatureFact(fact, signature)) continue;
 		if (options.toolName === "bash" && fact === signature.arguments[0]?.text) continue;
+		if (!options.includeLowValueFacts && isLowValueFact(options.toolName, fact)) continue;
 		const humanized = humanizeFact(options.toolName, fact);
 		if (!parts.includes(humanized)) parts.push(humanized);
 	}

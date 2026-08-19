@@ -76,7 +76,7 @@ function createContext(
 	};
 }
 
-test("renders pending calls with the same signature hierarchy", () => {
+test("renders pending calls without a collapsed duration", () => {
 	const args = { path: "src/index.ts", edits: [] };
 	const store = new ToolSummaryStore();
 	store.ensure("call-1", "edit", args);
@@ -89,7 +89,7 @@ test("renders pending calls with the same signature hierarchy", () => {
 		createContext(args, { isPartial: true }),
 	);
 	const lines = cleanLines(component.render(80));
-	assert.match(lines[0]!, /^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] Update\(src\/index\.ts\) · \d+\.\d+s$/);
+	assert.match(lines[0]!, /^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] Update\(src\/index\.ts\)$/);
 	assert.ok(lines[1]!.startsWith("  ⎿ \u00a0"));
 	store.clear();
 });
@@ -128,7 +128,7 @@ test("renders a syntax-aware collapsed edit with context on both sides", () => {
 	const rawLines = component.render(100);
 	const lines = cleanLines(rawLines);
 	assert.equal(lines[0], "⏺ Update(src/index.ts)");
-	assert.equal(lines[1], "  ⎿ \u00a0Added 1 line, removed 1 line · 型定義を修正しました");
+	assert.equal(lines[1], "  ⎿ \u00a0型定義を修正しました");
 	assert.ok(lines.slice(2).every((line) => line.startsWith("    ")));
 	assert.ok(lines.some((line) => line.includes("-10 const value = 'old';")));
 	assert.ok(lines.some((line) => line.includes("+10 const value = 'new';")));
@@ -137,6 +137,27 @@ test("renders a syntax-aware collapsed edit with context on both sides", () => {
 	}
 	assert.ok(rawLines.slice(2).some((line) => line.includes("\u001b[")));
 	for (const line of rawLines) assert.ok(visibleWidth(line) <= 100);
+});
+
+test("restores edit counts with the full diff when expanded", () => {
+	const args = { path: "src/index.ts", edits: [{ oldText: "old", newText: "new" }] };
+	const store = new ToolSummaryStore();
+	store.ensure("call-1", "edit", args);
+	store.setSemantic("call-1", semantic);
+	const definition = withCompactRenderer(createDefinition(), store);
+	const component = definition.renderResult!(
+		{
+			content: [{ type: "text", text: "ok" }],
+			details: { diff: "-1 old\n+1 new" },
+		},
+		{ expanded: true, isPartial: false },
+		plainTheme,
+		createContext(args, { expanded: true }),
+	);
+	const lines = cleanLines(component.render(100));
+	assert.equal(lines[0], "⏺ Update(src/index.ts)");
+	assert.equal(lines[1], "  ⎿ \u00a0Added 1 line, removed 1 line · 型定義を修正しました");
+	assert.ok(lines.includes("    exact result"));
 });
 
 test("renders the source-derived Claude completed marker", () => {
@@ -156,7 +177,7 @@ test("renders the source-derived Claude completed marker", () => {
 	assert.ok(!rendered.includes("<text>⏺</text>"));
 });
 
-test("keeps completed Bash signature, facts, and semantic summary", () => {
+test("keeps completed Bash outcome and summary without shell boilerplate", () => {
 	const args = { command: "npm test" };
 	const store = new ToolSummaryStore();
 	store.ensure("call-1", "bash", args);
@@ -172,7 +193,7 @@ test("keeps completed Bash signature, facts, and semantic summary", () => {
 	);
 	assert.deepEqual(cleanLines(success.render(100)), [
 		"⏺ Bash(tests)",
-		"  ⎿ \u00a0Ran 1 shell command · 型定義を修正しました",
+		"  ⎿ \u00a0型定義を修正しました",
 	]);
 
 	const failure = definition.renderResult!(
@@ -209,7 +230,7 @@ test("limits a collapsed write preview and shows the expansion hint", () => {
 	);
 	const lines = cleanLines(component.render(80));
 	assert.equal(lines[0], "⏺ Write(src/generated.ts)");
-	assert.equal(lines[1], "  ⎿ \u00a0Wrote 10 lines · 生成ファイルを書き込みました");
+	assert.equal(lines[1], "  ⎿ \u00a0生成ファイルを書き込みました");
 	assert.ok(lines.some((line) => line.includes("const value1 = 1;")));
 	assert.ok(lines.some((line) => line.includes("… 4 more lines")));
 	assert.ok(lines.slice(2).every((line) => line.startsWith("    ")));
@@ -234,6 +255,7 @@ test("keeps exact call and result nested when expanded", () => {
 	);
 	const lines = cleanLines(component.render(80));
 	assert.equal(lines[0], "⏺ Read(src/index.ts)");
+	assert.equal(lines[1], "  ⎿ \u00a0Read 1 line · 実装を確認しました");
 	assert.ok(lines.includes("    exact call"));
 	assert.ok(lines.includes("    command details"));
 	assert.ok(lines.includes("    exact result"));
@@ -361,6 +383,6 @@ test("renders persisted metadata without an in-memory summary", () => {
 	);
 	assert.deepEqual(cleanLines(component.render(100)), [
 		"⏺ Update(src/resumed.ts)",
-		"  ⎿ \u00a0Added 2 lines, removed 0 lines · 型定義を修正しました · 0.4s",
+		"  ⎿ \u00a0型定義を修正しました",
 	]);
 });

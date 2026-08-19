@@ -8,7 +8,7 @@ Built-in Toolを、Claude Codeに近い3段の視覚階層で表示する。
 
 ```text
 ⏺ Update(packages/core/src/types.ts)
-  ⎿  Added 1 line, removed 1 line · 型定義を修正しました · 0.4s
+  ⎿  型定義を修正しました
       997 ? { readonly [K in keyof P]: AudioParam }
       998 : Record<string, AudioParam>;
       999 readonly state: C extends { state: infer S }
@@ -21,10 +21,10 @@ Built-in Toolを、Claude Codeに近い3段の視覚階層で表示する。
 ```
 
 - 1段目: status markerと`Name(arguments)`形式のTool signature
-- 2段目: `  ⎿  `に続く実行結果のfacts。LLM semantic summaryは重複しない場合だけfactsの後ろへ併記し、完了durationを末尾へ置く
+- 2段目: `  ⎿  `に続く高価値な実行結果factsと、重複を除いたLLM semantic summary
 - 3段目: `    `で始まるcompact previewまたはexpanded detail
 
-Tool signatureは`Read(path)`、`Update(path)`、`Write(path)`、`Bash(command summary)`、`Search(pattern, path)`、`Find(pattern, path)`、`List(path)`へ正規化する。Bashも完了後にsignatureを残し、observed factsとsemantic summaryを表示する。Pending durationは1段目の末尾、error summaryは2段目の先頭へ置く。長い2段目は同じcontent columnで折り返し、狭いterminalではcontent widthを確保するためindentを縮める。
+Tool signatureは`Read(path)`、`Update(path)`、`Write(path)`、`Bash(command summary)`、`Search(pattern, path)`、`Find(pattern, path)`、`List(path)`へ正規化する。Collapsed表示では`Read N lines`、`Wrote N lines`、`Ran 1 shell command`、Editの追加・削除数、files／entries／result lines等の定型件数とdurationを隠す。test結果、`No matches`、error、truncatedは残す。error summaryは2段目の先頭へ置く。長い2段目は同じcontent columnで折り返し、狭いterminalではcontent widthを確保するためindentを縮める。
 
 Editの通常previewは、Pi built-in resultが持つ各hunkの**上4行・変更本体・下4行**を対称に表示する。code本文は元言語のsyntax highlightを維持し、追加・削除はline-number gutterの`+` / `-`と`toolDiffAdded` / `toolDiffRemoved`色で示す。赤緑を本文全体へ上書きしないため、syntaxとdiff semanticsを同時に読める。未知拡張子はneutral textへfallbackする。
 
@@ -40,7 +40,7 @@ LLM summaryが到着するまではTool名・path・command種別から作るfal
 
 Expanded表示では同じ3段構造を保ち、3段目へ正確な引数・command・全output・全diffをinline表示する。同じAssistant messageに複数Tool Callがある場合は`batch call 2/4`のように位置をfactsへ併記し、LLM summaryがfallbackした場合は展開時だけ理由を表示する。
 
-Factsはtarget・件数・成功／失敗・duration等を意味別に配色する。Expanded outputはReadのsyntax highlightingとEditのPi built-in diff rendererを維持し、Bashでは安全なSGR colorだけを保持してcursor操作等のterminal control sequenceを除去する。collapsedのsyntax-aware diffはexpanded rendererを置換しない。ANSI colorがないBash outputとGrep／Find／Ls outputには共通のsemantic colorを適用する。
+Expandedではcollapsedから省いた定型factsとdurationも復元し、意味別に配色する。Expanded outputはReadのsyntax highlightingとEditのPi built-in diff rendererを維持し、Bashでは安全なSGR colorだけを保持してcursor操作等のterminal control sequenceを除去する。collapsedのsyntax-aware diffはexpanded rendererを置換しない。ANSI colorがないBash outputとGrep／Find／Ls outputには共通のsemantic colorを適用する。
 
 ## 永続化
 

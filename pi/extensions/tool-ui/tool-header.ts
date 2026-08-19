@@ -29,6 +29,7 @@ export interface ToolHeaderOptions {
 	facts: readonly string[];
 	errorTail?: string;
 	summaryError?: string;
+	includeLowValueFacts?: boolean;
 	runningDuration?: string;
 	cwd?: string;
 	theme: Theme;
@@ -189,6 +190,7 @@ export class ToolHeaderComponent implements Component {
 			semanticSummary: this.options.semanticSummary,
 			status: this.options.status,
 			errorTail: this.options.errorTail,
+			includeLowValueFacts: this.options.includeLowValueFacts,
 		});
 		if (this.options.summaryError) {
 			parts.push(`summary fallback: ${this.options.summaryError.replace(/\s+/g, " ").trim().slice(0, 180)}`);
