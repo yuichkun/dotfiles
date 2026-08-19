@@ -16,7 +16,8 @@
     "syntaxGreen": "#a6e22e",
     "cyan": "#66d9ef",
     "purple": "#be84ff",
-    "selected": "#44475a"
+    "selected": "#44475a",
+    "userPanel": "#211f2a"
   },
   "colors": {
     "accent": "claudeAccent",
@@ -33,7 +34,7 @@
 
     "selectedBg": "selected",
     "scrollbarThumb": "selected",
-    "userMessageBg": "terminal",
+    "userMessageBg": "userPanel",
     "userMessageText": "terminal",
     "customMessageBg": "terminal",
     "customMessageText": "terminal",
