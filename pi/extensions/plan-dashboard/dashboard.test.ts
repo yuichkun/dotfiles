@@ -73,16 +73,25 @@ test("renders width-safe overview layouts across terminal sizes", () => {
 		assert.match(output, /Plan Dashboard · Living Plan実装/);
 		assert.match(output, /OUTCOME/);
 		assert.match(output, /▶ NOW/);
+		assert.match(output, /STAGES/);
 		assert.match(output, /S04/);
 	}
 });
 
-test("keeps the frontier within short terminal heights", () => {
-	const full = createComponent(15).render(80);
-	assert.equal(full.length, 15);
+test("degrades the overview before shrinking the graph on short terminals", () => {
+	const full = createComponent(16).render(80);
+	assert.equal(full.length, 16);
 	assertWidthSafe(full, 80);
 	assert.match(full.join("\n"), /OUTCOME/);
 	assert.match(full.join("\n"), /▶ NOW/);
+	assert.match(full.join("\n"), /STAGES/);
+
+	const compact = createComponent(15).render(80);
+	assert.equal(compact.length, 15);
+	assertWidthSafe(compact, 80);
+	assert.match(compact.join("\n"), /OUTCOME/);
+	assert.match(compact.join("\n"), /▶ NOW/);
+	assert.doesNotMatch(compact.join("\n"), /STAGES/);
 
 	const minimal = createComponent(14).render(80);
 	assert.equal(minimal.length, 14);
@@ -213,6 +222,82 @@ test("wide overview renders the complete 15-step DAG", () => {
 	assert.match(output, /┏/);
 	assert.match(output, /┄/);
 	assert.match(output, /DAGダッシュボ/);
+	assert.match(output, /✔ 調査 3\/3/);
+	assert.match(output, /▶ UI 0\/2/);
+	assert.match(output, /● 基盤/);
+	assert.match(output, /✔ 調査 3\/3.*▶ UI 0\/2.*● 基盤/);
+});
+
+test("orders and classifies archived and active phase progress", () => {
+	const plan = {
+		...TEST_PLAN,
+		archivedSteps: [
+			{
+				id: "A01",
+				phase: "履歴",
+				status: "done" as const,
+				compactedAt: "2026-01-02T00:00:00.000Z",
+			},
+			{
+				id: "A02",
+				phase: "共有",
+				status: "done" as const,
+				compactedAt: "2026-01-02T00:00:00.000Z",
+			},
+			{
+				id: "A03",
+				phase: "廃止",
+				status: "superseded" as const,
+				compactedAt: "2026-01-02T00:00:00.000Z",
+			},
+			{
+				id: "A04",
+				phase: "待機",
+				status: "done" as const,
+				compactedAt: "2026-01-02T00:00:00.000Z",
+			},
+		],
+		steps: [
+			{ ...TEST_PLAN.steps[0]!, phase: "共有" },
+			{
+				...TEST_PLAN.steps[3]!,
+				phase: "現在",
+				dependsOn: ["S01"],
+			},
+			{
+				...TEST_PLAN.steps[4]!,
+				phase: "次",
+				dependsOn: ["S01"],
+			},
+			{
+				...TEST_PLAN.steps[2]!,
+				phase: "未着手",
+				status: "pending" as const,
+				dependsOn: ["S01"],
+			},
+			{
+				...TEST_PLAN.steps[5]!,
+				phase: "待機",
+				dependsOn: ["S03"],
+			},
+			{
+				...TEST_PLAN.steps[6]!,
+				phase: "停止",
+				dependsOn: ["S03"],
+			},
+		],
+	};
+	const output = createComponent(
+		30,
+		{ workSinceUpdate: 0, turnsSinceUpdate: 0 },
+		undefined,
+		plan,
+	).render(240).join("\n");
+	assert.match(
+		output,
+		/✔ 履歴 1\/1.*✔ 共有 2\/2.*⊘ 廃止 1\/1.*○ 待機 1\/2.*▶ 現在 0\/1.*● 次.*● 未着手.*○ 停止/,
+	);
+	assert.doesNotMatch(output, /○ 停止 \d/);
 });
 
 test("keeps body readable and non-current statuses distinct", () => {

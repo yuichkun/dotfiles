@@ -629,10 +629,13 @@ export class PlanDashboardComponent extends BaseModal<void> {
 				: ` ${paint(this.theme, "tertiary", this.theme.bold("⊘ PLAN SUPERSEDED"))}`;
 		}
 		if (lineLimit <= 1) return [frontierLine];
-		return [
+
+		const lines = [
 			` ${paint(this.theme, "secondary", this.theme.bold("OUTCOME"))}  ${paint(this.theme, "primary", this.plan.objective)}`,
 			frontierLine,
 		];
+		if (lineLimit >= 3) lines.push(this.renderStageOverview());
+		return lines;
 	}
 
 	private renderFrontierLine(
@@ -641,6 +644,59 @@ export class PlanDashboardComponent extends BaseModal<void> {
 		role: SemanticColorRole,
 	): string {
 		return ` ${paint(this.theme, role, this.theme.bold(label))}  ${paint(this.theme, "secondary", view.step.id)}  ${paint(this.theme, "primary", this.theme.bold(view.step.title))}  ${paint(this.theme, "tertiary", `· ${view.step.goal}`)}`;
+	}
+
+	private renderStageOverview(): string {
+		interface StageState {
+			total: number;
+			done: number;
+			superseded: number;
+			inProgress: number;
+			ready: number;
+		}
+		const stages = new Map<string, StageState>();
+		const record = (
+			phase: string,
+			status: DisplayStepStatus,
+		): void => {
+			const stage = stages.get(phase) ?? {
+				total: 0,
+				done: 0,
+				superseded: 0,
+				inProgress: 0,
+				ready: 0,
+			};
+			stage.total++;
+			if (status === "done") stage.done++;
+			else if (status === "superseded") stage.superseded++;
+			else if (status === "in_progress") stage.inProgress++;
+			else if (status === "ready") stage.ready++;
+			stages.set(phase, stage);
+		};
+
+		for (const step of this.plan.archivedSteps) {
+			record(step.phase, step.status);
+		}
+		for (const view of this.views) record(view.step.phase, view.status);
+
+		const divider = paint(this.theme, "tertiary", "  ·  ");
+		const entries = [...stages].map(([phase, stage]) => {
+			const resolved = stage.done + stage.superseded;
+			if (stage.inProgress > 0) {
+				return paint(this.theme, "focus", `▶ ${phase} ${resolved}/${stage.total}`);
+			}
+			if (resolved === stage.total) {
+				return stage.done > 0
+					? paint(this.theme, "completed", `✔ ${phase} ${resolved}/${stage.total}`)
+					: paint(this.theme, "tertiary", `⊘ ${phase} ${resolved}/${stage.total}`);
+			}
+			const progress = resolved > 0 ? ` ${resolved}/${stage.total}` : "";
+			if (stage.ready > 0) {
+				return paint(this.theme, "primary", `● ${phase}${progress}`);
+			}
+			return paint(this.theme, "secondary", `○ ${phase}${progress}`);
+		});
+		return ` ${paint(this.theme, "secondary", this.theme.bold("STAGES"))}  ${entries.join(divider)}`;
 	}
 
 	private renderSummaryLine(width: number): string {
@@ -1306,7 +1362,7 @@ export class PlanDashboardComponent extends BaseModal<void> {
 		return Math.max(
 			1,
 			Math.min(
-				2,
+				3,
 				this.getTargetModalHeight() -
 					OVERVIEW_CHROME_LINES -
 					OVERVIEW_GRAPH_BUDGET_LINES,
