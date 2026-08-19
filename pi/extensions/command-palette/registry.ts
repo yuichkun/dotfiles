@@ -5,6 +5,8 @@ export interface CommandPaletteAction {
 	title: string;
 	description?: string;
 	keywords?: readonly string[];
+	/** Evaluated when the Palette opens and again before execution; keep it cheap and side-effect-free. Throwing aborts the current Palette operation. */
+	isAvailable?(ctx: ExtensionContext): boolean | Promise<boolean>;
 	run(ctx: ExtensionContext): void | Promise<void>;
 }
 

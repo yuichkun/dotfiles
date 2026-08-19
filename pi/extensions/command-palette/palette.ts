@@ -25,6 +25,10 @@ function getSearchText(action: CommandPaletteAction): string {
 		.join(" ");
 }
 
+function getErrorMessage(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
+}
+
 class CommandPaletteComponent extends BaseModal<string> {
 	private readonly input = new Input();
 	private readonly actions: readonly CommandPaletteAction[];
@@ -97,7 +101,7 @@ class CommandPaletteComponent extends BaseModal<string> {
 		if (this.filteredActions.length === 0) {
 			const message =
 				this.actions.length === 0
-					? "No actions registered yet"
+					? "No actions available here"
 					: "No matching actions";
 			lines.push(frame.row(`  ${this.theme.fg("dim", message)}`));
 			renderedActionRows++;
@@ -179,14 +183,62 @@ class CommandPaletteComponent extends BaseModal<string> {
 	}
 }
 
+export async function listAvailablePaletteActions(
+	ctx: ExtensionContext,
+	registry: CommandPaletteRegistry,
+): Promise<readonly CommandPaletteAction[]> {
+	const actions: CommandPaletteAction[] = [];
+	for (const action of registry.list()) {
+		if (!action.isAvailable || await action.isAvailable(ctx)) {
+			actions.push(action);
+		}
+	}
+	return actions;
+}
+
+export async function runPaletteAction(
+	ctx: ExtensionContext,
+	registry: CommandPaletteRegistry,
+	actionId: string,
+): Promise<void> {
+	const action = registry.get(actionId);
+	if (!action) {
+		ctx.ui.notify(`Unknown palette action: ${actionId}`, "error");
+		return;
+	}
+
+	try {
+		if (action.isAvailable && !await action.isAvailable(ctx)) {
+			ctx.ui.notify(`${action.title} is no longer available`, "info");
+			return;
+		}
+	} catch (error) {
+		ctx.ui.notify(
+			`${action.title} availability check failed: ${getErrorMessage(error)}`,
+			"error",
+		);
+		return;
+	}
+
+	try {
+		await action.run(ctx);
+	} catch (error) {
+		ctx.ui.notify(
+			`${action.title} failed: ${getErrorMessage(error)}`,
+			"error",
+		);
+	}
+}
+
 export async function openCommandPalette(
 	ctx: ExtensionContext,
 	registry: CommandPaletteRegistry,
 ): Promise<void> {
+	const actions = await listAvailablePaletteActions(ctx, registry);
 	const actionId = await showModal<string>(
 		ctx,
 		(modalContext) =>
-			new CommandPaletteComponent(registry.list(), modalContext),
+			new CommandPaletteComponent(actions, modalContext),
 		{
 			overlayOptions: {
 				width: 96,
@@ -198,16 +250,5 @@ export async function openCommandPalette(
 	);
 
 	if (!actionId) return;
-	const action = registry.get(actionId);
-	if (!action) {
-		ctx.ui.notify(`Unknown palette action: ${actionId}`, "error");
-		return;
-	}
-
-	try {
-		await action.run(ctx);
-	} catch (error) {
-		const message = error instanceof Error ? error.message : String(error);
-		ctx.ui.notify(`${action.title} failed: ${message}`, "error");
-	}
+	await runPaletteAction(ctx, registry, actionId);
 }
