@@ -69,13 +69,143 @@ test("renders width-safe overview layouts across terminal sizes", () => {
 		const lines = createComponent(30).render(width);
 		assert.equal(lines.length, 30, "the overlay should use every terminal row");
 		assertWidthSafe(lines, width);
-		assert.match(lines.join("\n"), /Plan Dashboard · Living Plan実装/);
-		assert.match(lines.join("\n"), /S04/);
+		const output = lines.join("\n");
+		assert.match(output, /Plan Dashboard · Living Plan実装/);
+		assert.match(output, /OUTCOME/);
+		assert.match(output, /▶ NOW/);
+		assert.match(output, /S04/);
 	}
+});
+
+test("keeps the frontier within short terminal heights", () => {
+	const full = createComponent(15).render(80);
+	assert.equal(full.length, 15);
+	assertWidthSafe(full, 80);
+	assert.match(full.join("\n"), /OUTCOME/);
+	assert.match(full.join("\n"), /▶ NOW/);
+
+	const minimal = createComponent(14).render(80);
+	assert.equal(minimal.length, 14);
+	assertWidthSafe(minimal, 80);
+	assert.match(minimal.join("\n"), /▶ NOW/);
+	assert.doesNotMatch(minimal.join("\n"), /OUTCOME/);
+
+	for (const rows of [13, 12, 11]) {
+		const constrained = createComponent(rows).render(80);
+		assert.equal(constrained.length, rows);
+		assertWidthSafe(constrained, 80);
+		assert.match(constrained.join("\n"), /▶ NOW/);
+	}
+});
+
+test("shows NEXT, completion, or waiting when nothing is in progress", () => {
+	const nextPlan = {
+		...TEST_PLAN,
+		steps: TEST_PLAN.steps.map((step) =>
+			step.id === "S04" ? { ...step, status: "done" as const } : step,
+		),
+	};
+	const next = createComponent(
+		30,
+		{ workSinceUpdate: 0, turnsSinceUpdate: 0 },
+		undefined,
+		nextPlan,
+	).render(120).join("\n");
+	assert.match(next, /● NEXT {2}S05/);
+	assert.doesNotMatch(next, /▶ NOW/);
+
+	const reorderedNextPlan = {
+		...nextPlan,
+		steps: [
+			...nextPlan.steps.filter((step) => step.id === "S06"),
+			...nextPlan.steps.filter((step) => step.id === "S05"),
+			...nextPlan.steps.filter(
+				(step) => step.id !== "S05" && step.id !== "S06",
+			),
+		],
+	};
+	assert.match(
+		createComponent(
+			30,
+			{ workSinceUpdate: 0, turnsSinceUpdate: 0 },
+			undefined,
+			reorderedNextPlan,
+		).render(120).join("\n"),
+		/● NEXT {2}S06/,
+	);
+
+	const completedPlan = {
+		...TEST_PLAN,
+		steps: TEST_PLAN.steps.map((step) => ({ ...step, status: "done" as const })),
+	};
+	const completed = createComponent(
+		30,
+		{ workSinceUpdate: 0, turnsSinceUpdate: 0 },
+		undefined,
+		completedPlan,
+	).render(120).join("\n");
+	assert.match(completed, /✔ PLAN COMPLETE/);
+	assert.doesNotMatch(completed, /● NEXT/);
+
+	const supersededPlan = {
+		...TEST_PLAN,
+		steps: TEST_PLAN.steps.map((step) => ({
+			...step,
+			status: "superseded" as const,
+		})),
+	};
+	const superseded = createComponent(
+		30,
+		{ workSinceUpdate: 0, turnsSinceUpdate: 0 },
+		undefined,
+		supersededPlan,
+	).render(120).join("\n");
+	assert.match(superseded, /⊘ PLAN SUPERSEDED/);
+	assert.doesNotMatch(superseded, /PLAN COMPLETE/);
+
+	const compactedCompletedPlan = {
+		...supersededPlan,
+		archivedSteps: [
+			{
+				id: "S00",
+				phase: "調査",
+				status: "done" as const,
+				compactedAt: "2026-01-02T00:00:00.000Z",
+			},
+		],
+	};
+	const compactedCompleted = createComponent(
+		30,
+		{ workSinceUpdate: 0, turnsSinceUpdate: 0 },
+		undefined,
+		compactedCompletedPlan,
+	).render(120).join("\n");
+	assert.match(compactedCompleted, /✔ PLAN COMPLETE/);
+	assert.doesNotMatch(compactedCompleted, /PLAN SUPERSEDED/);
+
+	const blockedPlan = {
+		...TEST_PLAN,
+		archivedSteps: [],
+		steps: TEST_PLAN.steps.slice(0, 2).map((step, index) => ({
+			...step,
+			status: "pending" as const,
+			dependsOn: [index === 0 ? "S02" : "S01"],
+		})),
+	};
+	const blocked = createComponent(
+		30,
+		{ workSinceUpdate: 0, turnsSinceUpdate: 0 },
+		undefined,
+		blockedPlan,
+	).render(120).join("\n");
+	assert.match(blocked, /○ WAITING {2}S01/);
+	assert.doesNotMatch(blocked, /PLAN COMPLETE/);
 });
 
 test("wide overview renders the complete 15-step DAG", () => {
 	const output = createComponent(40).render(140).join("\n");
+	assert.match(output, /OUTCOME {2}依存関係付きの計画を継続的に更新する。/);
+	assert.match(output, /▶ NOW {2}S04 {2}DAGダッシュボードを実装する/);
 	for (let step = 1; step <= 15; step++) {
 		assert.match(output, new RegExp(`S${String(step).padStart(2, "0")}`));
 	}

@@ -37,6 +37,8 @@ import { PlanRuntime } from "./state.ts";
 
 const DEFAULT_TERMINAL_ROWS = 30;
 const RECENT_RESOLVED_STEP_LIMIT = 5;
+const OVERVIEW_CHROME_LINES = 9;
+const OVERVIEW_GRAPH_BUDGET_LINES = 4;
 
 type CanvasStyle =
 	| "plain"
@@ -580,9 +582,12 @@ export class PlanDashboardComponent extends BaseModal<void> {
 
 	private renderOverview(width: number): string[] {
 		const frame = new ModalFrame(this.theme, width);
-		const bodyHeight = this.getOverviewBodyHeight();
+		const overview = this.renderPlanOverview(this.getOverviewLineLimit());
+		const bodyHeight = this.getOverviewBodyHeight(overview.length);
 		const lines = [
 			frame.top(`Plan Dashboard${this.pausedMarker()} · ${this.plan.title}`),
+			...overview.map((line) => frame.row(line)),
+			frame.separator(),
 			frame.row(this.renderSummaryLine(frame.innerWidth)),
 			frame.separator(),
 		];
@@ -602,6 +607,40 @@ export class PlanDashboardComponent extends BaseModal<void> {
 		);
 		lines.push(frame.bottom());
 		return lines;
+	}
+
+	private renderPlanOverview(lineLimit: number): string[] {
+		const current = this.views.find((view) => view.status === "in_progress");
+		const next = this.views.find((view) => view.status === "ready");
+		const waiting = this.views.find((view) => view.status === "blocked");
+		let frontierLine: string;
+		if (current) {
+			frontierLine = this.renderFrontierLine("▶ NOW", current, "focus");
+		} else if (next) {
+			frontierLine = this.renderFrontierLine("● NEXT", next, "focus");
+		} else if (waiting) {
+			frontierLine = this.renderFrontierLine("○ WAITING", waiting, "secondary");
+		} else {
+			const hasDone =
+				this.views.some((view) => view.status === "done") ||
+				this.plan.archivedSteps.some((step) => step.status === "done");
+			frontierLine = hasDone
+				? ` ${paint(this.theme, "completed", this.theme.bold("✔ PLAN COMPLETE"))}`
+				: ` ${paint(this.theme, "tertiary", this.theme.bold("⊘ PLAN SUPERSEDED"))}`;
+		}
+		if (lineLimit <= 1) return [frontierLine];
+		return [
+			` ${paint(this.theme, "secondary", this.theme.bold("OUTCOME"))}  ${paint(this.theme, "primary", this.plan.objective)}`,
+			frontierLine,
+		];
+	}
+
+	private renderFrontierLine(
+		label: string,
+		view: PlanStepView,
+		role: SemanticColorRole,
+	): string {
+		return ` ${paint(this.theme, role, this.theme.bold(label))}  ${paint(this.theme, "secondary", view.step.id)}  ${paint(this.theme, "primary", this.theme.bold(view.step.title))}  ${paint(this.theme, "tertiary", `· ${view.step.goal}`)}`;
 	}
 
 	private renderSummaryLine(width: number): string {
@@ -1263,8 +1302,25 @@ export class PlanDashboardComponent extends BaseModal<void> {
 		return this.tui.terminal?.rows ?? DEFAULT_TERMINAL_ROWS;
 	}
 
-	private getOverviewBodyHeight(): number {
-		return Math.max(4, this.getTargetModalHeight() - 8);
+	private getOverviewLineLimit(): number {
+		return Math.max(
+			1,
+			Math.min(
+				2,
+				this.getTargetModalHeight() -
+					OVERVIEW_CHROME_LINES -
+					OVERVIEW_GRAPH_BUDGET_LINES,
+			),
+		);
+	}
+
+	private getOverviewBodyHeight(overviewLines: number): number {
+		return Math.max(
+			1,
+			this.getTargetModalHeight() -
+				overviewLines -
+				OVERVIEW_CHROME_LINES,
+		);
 	}
 
 	private getDetailBodyHeight(): number {

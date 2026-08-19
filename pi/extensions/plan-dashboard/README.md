@@ -102,6 +102,13 @@ Plan作成要求とON/OFFはCustom Entry、Fable consultationとPlan snapshotは
 
 ### Overview
 
+Dashboard本体はDAGの前に、Plan全体を読むための最大2行の概要を表示する。
+
+- `OUTCOME`: Planが達成する目的
+- `NOW` / `NEXT`: 現在実行中、または次に着手可能なStepとGoal。複数候補がある場合はPlan snapshot内で最初のStepを表示する。全Stepがterminalなら、done実績があれば`PLAN COMPLETE`、すべてsupersededなら`PLAN SUPERSEDED`を表示する。未解決だが着手不能なら`WAITING`を表示する
+
+11行以上の端末で、高さが限られる場合は`OUTCOME`を省略し、`NOW` / `NEXT`、`PLAN COMPLETE`、`PLAN SUPERSEDED`、または`WAITING`のfrontier行を最後まで残す。概要の後にprogress summaryと依存関係DAGを表示する。
+
 - `←` / `→`: 前後のstageへ移動
 - `↑` / `↓`: 同じstage内を移動
 - `Tab`: 実行中・着手可能Stepを巡回
