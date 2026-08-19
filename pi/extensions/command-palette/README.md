@@ -6,8 +6,12 @@ Pi内の決定的なローカルUI操作を、対話・prompt・skillとは別�
 
 現在のAction：
 
-- `Open Plan Dashboard…`：現在のSession branchにあるLiving Planを開く
+- `Start New Living Plan…`：task editorから新しいLiving Planを開始する
+- `Open Current Plan…`：current PlanのDashboardを開く
+- `Pause Living Plan` / `Resume Living Plan`：Plan workflowが存在するとき、現在状態に合う片方だけを表示する
 - `Open in VS Code…`：独立したWorkspace Pickerを開き、現在または別のWorkspaceを選択する
+
+Actionは`isAvailable`で現在contextに不要な項目を非表示にできる。
 
 ## Actionの追加
 
@@ -26,5 +30,5 @@ registry.register({
 ```
 
 Action IDは小文字の英数字から始め、英数字・`.`・`_`・`-`のみを使用する。
-PaletteにはAgent turnを開始しない、ローカルで完結する機械的操作だけを登録する。
+Paletteには決定的で明示的な操作だけを登録する。通常はローカルで完結させるが、`Start New Living Plan…`のようにユーザーがworkflow開始を明示選択したActionはAgent turnを開始できる。
 Action adapterは対象機能の公開関数を呼ぶだけにし、機能のUIや状態をPalette側へ持ち込まない。

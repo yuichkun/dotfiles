@@ -50,6 +50,19 @@ function requestEntry(): SessionEntry {
 	});
 }
 
+function controlEntry(enabled: boolean): SessionEntry {
+	return entry({
+		type: "custom",
+		customType: PLAN_CONTROL_ENTRY,
+		data: {
+			schemaVersion: 1,
+			id: `control-${enabled}`,
+			enabled,
+			createdAt: TEST_PLAN.createdAt,
+		},
+	});
+}
+
 function setupStart(branch: SessionEntry[]): {
 	registry: CommandPaletteRegistry;
 	entries: SessionEntry[];
@@ -97,6 +110,8 @@ function setupStart(branch: SessionEntry[]): {
 		confirmations,
 		operations,
 		context: (options = {}) => ({
+			mode: "json",
+			hasUI: true,
 			isIdle: () => options.idle ?? true,
 			sessionManager: {
 				getBranch: () => entries,
@@ -115,101 +130,140 @@ function setupStart(branch: SessionEntry[]): {
 	};
 }
 
-test("toggles and persists branch activity through the shared event", async () => {
-	const branch = [planEntry()];
-	const emitted: Array<{ name: string; data: unknown }> = [];
-	const notifications: string[] = [];
-	const pi = {
-		appendEntry: (customType: string, data: unknown) => {
-			branch.push(entry({ type: "custom", customType, data }));
-		},
-		events: {
-			emit: (name: string, data: unknown) => emitted.push({ name, data }),
-		},
-	} as unknown as ExtensionAPI;
-	const registry = new CommandPaletteRegistry();
-	registerPlanActions(pi, registry);
-	const toggle = registry.get("plan.toggle");
-	assert.ok(toggle);
-	const ctx = {
-		isIdle: () => true,
-		sessionManager: {
-			getBranch: () => branch,
-			getSessionId: () => "session-1",
-			getLeafId: () => String(branch.length),
-		},
-		ui: { notify: (message: string) => notifications.push(message) },
-	} as unknown as ExtensionContext;
+async function availability(
+	registry: CommandPaletteRegistry,
+	ctx: ExtensionContext,
+): Promise<Record<string, boolean>> {
+	const result: Record<string, boolean> = {};
+	for (const action of registry.list()) {
+		result[action.id] = action.isAvailable
+			? await action.isAvailable(ctx)
+			: true;
+	}
+	return result;
+}
 
-	await toggle.run(ctx);
-	const persisted = branch.at(-1) as {
-		customType?: string;
-		data?: { enabled?: boolean };
-	};
-	assert.equal(persisted.customType, PLAN_CONTROL_ENTRY);
-	assert.equal(persisted.data?.enabled, false);
-	assert.equal(emitted[0]?.name, PLAN_CONTROL_CHANGED_EVENT);
-	assert.deepEqual(emitted[0]?.data, {
+test("shows only controls valid for the current Plan state", async () => {
+	const empty = setupStart([]);
+	assert.deepEqual(await availability(empty.registry, empty.context()), {
+		"plan.start": true,
+		"plan.current": false,
+		"plan.pause": false,
+		"plan.resume": false,
+	});
+
+	const pending = setupStart([requestEntry()]);
+	assert.deepEqual(await availability(pending.registry, pending.context()), {
+		"plan.start": true,
+		"plan.current": false,
+		"plan.pause": true,
+		"plan.resume": false,
+	});
+
+	const pausedPending = setupStart([requestEntry(), controlEntry(false)]);
+	assert.deepEqual(
+		await availability(pausedPending.registry, pausedPending.context()),
+		{
+			"plan.start": true,
+			"plan.current": false,
+			"plan.pause": false,
+			"plan.resume": true,
+		},
+	);
+
+	const active = setupStart([planEntry()]);
+	assert.deepEqual(await availability(active.registry, active.context()), {
+		"plan.start": true,
+		"plan.current": true,
+		"plan.pause": true,
+		"plan.resume": false,
+	});
+
+	const paused = setupStart([planEntry(), controlEntry(false)]);
+	assert.deepEqual(await availability(paused.registry, paused.context()), {
+		"plan.start": true,
+		"plan.current": true,
+		"plan.pause": false,
+		"plan.resume": true,
+	});
+	assert.equal(paused.registry.get("plan.toggle"), undefined);
+	assert.equal(paused.registry.get("plan.dashboard"), undefined);
+});
+
+test("pauses and resumes through separate state-specific actions", async () => {
+	const state = setupStart([planEntry()]);
+	const ctx = state.context();
+	await state.registry.get("plan.pause")?.run(ctx);
+	assert.equal(
+		(state.entries.at(-1) as { customType?: string }).customType,
+		PLAN_CONTROL_ENTRY,
+	);
+	assert.equal(
+		((state.entries.at(-1) as { data?: { enabled?: boolean } }).data?.enabled),
+		false,
+	);
+	assert.equal(state.emitted.at(-1)?.name, PLAN_CONTROL_CHANGED_EVENT);
+	assert.deepEqual(state.emitted.at(-1)?.data, {
 		sessionId: "session-1",
 		branchLeafId: "2",
-		control: persisted.data,
+		control: (state.entries.at(-1) as { data?: unknown }).data,
 	});
-	assert.equal(notifications.at(-1), "Living plan paused.");
+	assert.equal(state.notifications.at(-1), "Living plan paused.");
 
-	await toggle.run(ctx);
+	await state.registry.get("plan.resume")?.run(ctx);
 	assert.equal(
-		((branch.at(-1) as { data?: { enabled?: boolean } }).data?.enabled),
+		((state.entries.at(-1) as { data?: { enabled?: boolean } }).data?.enabled),
 		true,
 	);
-	assert.equal(emitted.length, 2);
-	assert.equal(notifications.at(-1), "Living plan resumed.");
+	assert.equal(state.emitted.at(-1)?.name, PLAN_CONTROL_CHANGED_EVENT);
+	assert.deepEqual(state.emitted.at(-1)?.data, {
+		sessionId: "session-1",
+		branchLeafId: "3",
+		control: (state.entries.at(-1) as { data?: unknown }).data,
+	});
+	assert.equal(state.notifications.at(-1), "Living plan resumed.");
 });
 
-test("does not toggle while an agent turn is active", async () => {
-	let appended = false;
-	const notifications: string[] = [];
-	const pi = {
-		appendEntry: () => {
-			appended = true;
-		},
-		events: { emit: () => {} },
-	} as unknown as ExtensionAPI;
-	const registry = new CommandPaletteRegistry();
-	registerPlanActions(pi, registry);
-	const toggle = registry.get("plan.toggle");
-	assert.ok(toggle);
-	const ctx = {
-		isIdle: () => false,
-		ui: { notify: (message: string) => notifications.push(message) },
-	} as unknown as ExtensionContext;
+test("guards direct control mutations and opens the current Dashboard", async () => {
+	const busy = setupStart([planEntry()]);
+	await busy.registry.get("plan.pause")?.run(busy.context({ idle: false }));
+	assert.equal(busy.entries.length, 1);
+	assert.match(busy.notifications.at(-1) ?? "", /before pausing/);
 
-	await toggle.run(ctx);
-	assert.equal(appended, false);
-	assert.match(notifications[0] ?? "", /Wait for the current agent turn/);
-});
+	const busyResume = setupStart([planEntry(), controlEntry(false)]);
+	await busyResume.registry.get("plan.resume")?.run(
+		busyResume.context({ idle: false }),
+	);
+	assert.equal(busyResume.entries.length, 2);
+	assert.match(busyResume.notifications.at(-1) ?? "", /before resuming/);
 
-test("does not create controls on branches without a plan workflow", async () => {
-	let appended = false;
-	const notifications: string[] = [];
-	const pi = {
-		appendEntry: () => {
-			appended = true;
-		},
-		events: { emit: () => {} },
-	} as unknown as ExtensionAPI;
-	const registry = new CommandPaletteRegistry();
-	registerPlanActions(pi, registry);
-	const toggle = registry.get("plan.toggle");
-	assert.ok(toggle);
-	const ctx = {
-		isIdle: () => true,
-		sessionManager: { getBranch: () => [] },
-		ui: { notify: (message: string) => notifications.push(message) },
-	} as unknown as ExtensionContext;
+	const empty = setupStart([]);
+	await empty.registry.get("plan.pause")?.run(empty.context());
+	assert.equal(empty.entries.length, 0);
+	assert.match(empty.notifications.at(-1) ?? "", /No Living Plan exists/);
 
-	await toggle.run(ctx);
-	assert.equal(appended, false);
-	assert.match(notifications[0] ?? "", /No living plan exists/);
+	const alreadyPaused = setupStart([planEntry(), controlEntry(false)]);
+	await alreadyPaused.registry.get("plan.pause")?.run(alreadyPaused.context());
+	assert.equal(alreadyPaused.entries.length, 2);
+	assert.equal(
+		alreadyPaused.notifications.at(-1),
+		"Living plan is already paused.",
+	);
+
+	const alreadyActive = setupStart([planEntry()]);
+	await alreadyActive.registry.get("plan.resume")?.run(alreadyActive.context());
+	assert.equal(alreadyActive.entries.length, 1);
+	assert.equal(
+		alreadyActive.notifications.at(-1),
+		"Living plan is already active.",
+	);
+
+	const current = setupStart([planEntry()]);
+	await current.registry.get("plan.current")?.run(current.context());
+	assert.equal(
+		current.notifications.at(-1),
+		"Plan Dashboard is only available in TUI mode",
+	);
 });
 
 test("starts the first Plan from the Palette editor", async () => {

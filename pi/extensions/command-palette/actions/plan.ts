@@ -17,6 +17,10 @@ function restoreRuntime(ctx: ExtensionContext): PlanRuntime {
 	return runtime;
 }
 
+function hasPlanWorkflow(runtime: PlanRuntime): boolean {
+	return Boolean(runtime.getPlan() || runtime.getPendingRequest());
+}
+
 async function startNewPlan(
 	pi: ExtensionAPI,
 	ctx: ExtensionContext,
@@ -50,6 +54,40 @@ async function startNewPlan(
 	pi.sendUserMessage(task);
 }
 
+function changePlanActivity(
+	pi: ExtensionAPI,
+	ctx: ExtensionContext,
+	enabled: boolean,
+): void {
+	if (!ctx.isIdle()) {
+		ctx.ui.notify(
+			`Wait for the current agent turn before ${enabled ? "resuming" : "pausing"} the Living Plan`,
+			"info",
+		);
+		return;
+	}
+	const runtime = restoreRuntime(ctx);
+	if (!hasPlanWorkflow(runtime)) {
+		ctx.ui.notify(
+			"No Living Plan exists in the current Pi Session branch",
+			"info",
+		);
+		return;
+	}
+	if (runtime.isEnabled() === enabled) {
+		ctx.ui.notify(
+			`Living plan is already ${enabled ? "active" : "paused"}.`,
+			"info",
+		);
+		return;
+	}
+	persistPlanEnabled(pi, runtime, ctx, enabled);
+	ctx.ui.notify(
+		enabled ? "Living plan resumed." : "Living plan paused.",
+		"info",
+	);
+}
+
 export function registerPlanActions(
 	pi: ExtensionAPI,
 	registry: CommandPaletteRegistry,
@@ -63,47 +101,43 @@ export function registerPlanActions(
 	});
 
 	registry.register({
-		id: "plan.toggle",
-		title: "Toggle Living Plan",
-		description: "Pause or resume the plan on this Pi Session branch",
-		keywords: ["plan", "planning", "pause", "resume", "on", "off"],
-		run: (ctx) => {
-			if (!ctx.isIdle()) {
-				ctx.ui.notify(
-					"Wait for the current agent turn before toggling the living plan",
-					"info",
-				);
-				return;
-			}
-			const runtime = restoreRuntime(ctx);
-			if (!runtime.getPlan() && !runtime.getPendingRequest()) {
-				ctx.ui.notify(
-					"No living plan exists in the current Pi Session branch",
-					"info",
-				);
-				return;
-			}
-			const enabled = !runtime.isEnabled();
-			persistPlanEnabled(pi, runtime, ctx, enabled);
-			ctx.ui.notify(
-				enabled ? "Living plan resumed." : "Living plan paused.",
-				"info",
-			);
-		},
-	});
-
-	registry.register({
-		id: "plan.dashboard",
-		title: "Open Plan Dashboard…",
-		description: "Inspect the current session's living plan",
+		id: "plan.current",
+		title: "Open Current Plan…",
+		description: "Inspect the current branch's Living Plan",
 		keywords: [
 			"plan",
 			"planning",
+			"current",
 			"progress",
 			"dashboard",
 			"todo",
 			"dependencies",
 		],
-		run: openPlanDashboard,
+		isAvailable: (ctx) => Boolean(restoreRuntime(ctx).getPlan()),
+		run: (ctx) => openPlanDashboard(ctx),
+	});
+
+	registry.register({
+		id: "plan.pause",
+		title: "Pause Living Plan",
+		description: "Pause planning context and the plan tool on this branch",
+		keywords: ["plan", "planning", "pause", "suspend", "toggle", "off"],
+		isAvailable: (ctx) => {
+			const runtime = restoreRuntime(ctx);
+			return hasPlanWorkflow(runtime) && runtime.isEnabled();
+		},
+		run: (ctx) => changePlanActivity(pi, ctx, false),
+	});
+
+	registry.register({
+		id: "plan.resume",
+		title: "Resume Living Plan",
+		description: "Resume a paused Living Plan on this branch",
+		keywords: ["plan", "planning", "resume", "continue", "toggle", "on"],
+		isAvailable: (ctx) => {
+			const runtime = restoreRuntime(ctx);
+			return hasPlanWorkflow(runtime) && !runtime.isEnabled();
+		},
+		run: (ctx) => changePlanActivity(pi, ctx, true),
 	});
 }

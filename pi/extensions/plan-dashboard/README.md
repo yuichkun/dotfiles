@@ -26,7 +26,7 @@ Plan Modeや権限制御は導入せず、ユーザーが`/plan`を実行したP
 - `on`: pause中のPlanをresumeする
 - `status`: Dashboardを開かずにON/OFF、revision、現在Step、active/archive件数を表示する
 
-同じON/OFF切り替えは`/palette` → `Toggle Living Plan`からも実行できる。
+同じPause/Resume操作は`/palette` → `Pause Living Plan` / `Resume Living Plan`からも実行できる。
 
 ON/OFFはCustom Entryへ保存され、`session_start`と`session_tree`で現在のPi Session branchから復元される。旧SessionはPlan workflowが存在すればONとして復元する。
 
@@ -95,7 +95,7 @@ Plan作成要求とON/OFFはCustom Entry、Fable consultationとPlan snapshotは
 
 ## Dashboard
 
-- `/palette` → `Open Plan Dashboard…`
+- `/palette` → `Open Current Plan…`
 - `/plan-dashboard`
 
 画面最上部のfixed Overlayにはprogress barと現在Stepを表示する。Planがない、またはOFFのPi Session branchではOverlayを表示しない。staleness thresholdを超えた場合は、最後の更新以降のwork/turn数を表示する。

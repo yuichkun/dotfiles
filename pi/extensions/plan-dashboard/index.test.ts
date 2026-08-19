@@ -312,9 +312,9 @@ test("applies Palette request and activity events to the active plan extension",
 
 	const registry = new CommandPaletteRegistry();
 	registerPlanActions(pi, registry);
-	await registry.get("plan.toggle")?.run(ctx);
+	await registry.get("plan.pause")?.run(ctx);
 	assert.deepEqual(activeTools, ["read"]);
-	await registry.get("plan.toggle")?.run(ctx);
+	await registry.get("plan.resume")?.run(ctx);
 	assert.deepEqual(activeTools, ["read", "plan"]);
 	await registry.get("plan.start")?.run(ctx);
 	assert.deepEqual(activeTools, ["read", "plan"]);
