@@ -122,6 +122,15 @@ Dashboard本体はDAGの前に、Plan全体を読むための最大3行の概要
 
 Overviewは未解決Stepと直近5件のresolved Stepを標準表示し、古いresolved Stepは省略する。
 
+### Definition of Done
+
+各Stepの`acceptance`をDefinition of DoneとしてDetailへ表示する。criterion単位の独立した途中状態は保存せず、Step状態をsingle source of truthとする。
+
+- `done`: 全criterionを`✓`で表示する
+- `ready` / `blocked` / `in_progress` / `superseded`: `□`のまま表示する
+
+Agentは全criterionを検証してからだけ、`set`または`progress`でStepを`done`にする。したがってStep完了とDoDのcheck表示は同じPlan revisionで更新される。
+
 ### Detail / Archive
 
 - `↑` / `↓`: scroll

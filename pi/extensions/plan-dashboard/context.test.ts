@@ -31,6 +31,20 @@ test("injects direct planning with optional consultation for an explicit request
 	assert.match(context ?? "", /genuinely difficult, ambiguous, or high-risk/);
 	assert.match(context ?? "", /optional advice, not an approval authority/);
 	assert.match(context ?? "", /Do not consult when the user asks you not to/);
+	assert.match(context ?? "", /every criterion has been verified/);
+	assert.match(context ?? "", /checks its full Definition of Done/);
+});
+
+test("requires verified Definition of Done criteria before progress completion", () => {
+	const context = buildPlanContext({
+		plan: TEST_PLAN,
+		enabled: true,
+		workSinceUpdate: 0,
+		turnsSinceUpdate: 0,
+	}) ?? "";
+	assert.match(context, /only after every acceptance criterion has been verified/);
+	assert.match(context, /done step is displayed with its full Definition of Done checked/);
+	assert.match(context, /unfinished and superseded steps remain unchecked/);
 });
 
 test("reports automatically compacted progress in a fresh digest", () => {

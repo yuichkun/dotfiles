@@ -16,6 +16,7 @@ import { TEST_PLAN } from "./test-fixture.ts";
 const keyByAction: Record<string, string> = {
 	"tui.select.up": "\u001b[A",
 	"tui.select.down": "\u001b[B",
+	"tui.select.right": "\u001b[C",
 	"tui.select.pageUp": "\u001b[5~",
 	"tui.select.pageDown": "\u001b[6~",
 	"tui.select.confirm": "\r",
@@ -570,6 +571,88 @@ test("enter opens a scrollable full detail view and escape returns", () => {
 
 	component.handleInput("\u001b");
 	assert.match(component.render(120).join("\n"), /Plan Dashboard · Living Plan実装/);
+});
+
+test("checks every Definition of Done item only for completed steps", () => {
+	const incomplete = createComponent();
+	incomplete.handleInput("\r");
+	const incompleteDetail = incomplete.render(120).join("\n");
+	assert.match(incompleteDetail, /IN PROGRESS/);
+	assert.match(incompleteDetail, /□ DAGダッシュボードを実装するが検証されている。/);
+	assert.doesNotMatch(incompleteDetail, /✓ DAGダッシュボードを実装するが検証されている。/);
+
+	const completedPlan = {
+		...TEST_PLAN,
+		steps: TEST_PLAN.steps.map((step) => ({ ...step, status: "done" as const })),
+	};
+	const completed = createComponent(
+		30,
+		{ workSinceUpdate: 0, turnsSinceUpdate: 0 },
+		undefined,
+		completedPlan,
+	);
+	completed.handleInput("\r");
+	const completedDetail = completed.render(120).join("\n");
+	assert.match(completedDetail, /✓ .*が検証されている。/);
+	assert.doesNotMatch(completedDetail, /□ .*が検証されている。/);
+
+	const pendingPlan = {
+		...TEST_PLAN,
+		steps: TEST_PLAN.steps.map((step) =>
+			step.id === "S04" ? { ...step, status: "done" as const } : step,
+		),
+	};
+	const pending = createComponent(
+		30,
+		{ workSinceUpdate: 0, turnsSinceUpdate: 0 },
+		undefined,
+		pendingPlan,
+	);
+	assert.match(pending.render(120).join("\n"), /● S05 READY/);
+	pending.handleInput("\r");
+	assert.match(pending.render(120).join("\n"), /□ 評価基準を決めるが検証されている。/);
+
+	const blockedPlan = {
+		...TEST_PLAN,
+		archivedSteps: [],
+		steps: TEST_PLAN.steps.slice(0, 2).map((step, index) => ({
+			...step,
+			status: "pending" as const,
+			dependsOn: index === 0 ? [] : ["S01"],
+		})),
+	};
+	const blocked = createComponent(
+		30,
+		{ workSinceUpdate: 0, turnsSinceUpdate: 0 },
+		undefined,
+		blockedPlan,
+	);
+	assert.match(blocked.render(120).join("\n"), /● S01 READY/);
+	blocked.handleInput(keyByAction["tui.select.right"]!);
+	assert.match(blocked.render(120).join("\n"), /○ S02 WAITING/);
+	blocked.handleInput("\r");
+	const blockedDetail = blocked.render(120).join("\n");
+	assert.match(blockedDetail, /○ WAITING/);
+	assert.match(blockedDetail, /□ Pi APIを調査するが検証されている。/);
+	assert.doesNotMatch(blockedDetail, /✓ Pi APIを調査するが検証されている。/);
+
+	const supersededPlan = {
+		...TEST_PLAN,
+		steps: TEST_PLAN.steps.map((step) => ({
+			...step,
+			status: "superseded" as const,
+		})),
+	};
+	const superseded = createComponent(
+		30,
+		{ workSinceUpdate: 0, turnsSinceUpdate: 0 },
+		undefined,
+		supersededPlan,
+	);
+	superseded.handleInput("\r");
+	const supersededDetail = superseded.render(120).join("\n");
+	assert.match(supersededDetail, /□ .*が検証されている。/);
+	assert.doesNotMatch(supersededDetail, /✓ .*が検証されている。/);
 });
 
 test("marks a paused plan without hiding its dashboard", () => {

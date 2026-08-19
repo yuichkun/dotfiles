@@ -33,7 +33,8 @@ ${request.task}
 3. Use op="consult" only when the task is genuinely difficult, ambiguous, or high-risk and independent advice would materially help. Pass only observed facts, constraints, and open questions—never a proposed solution. Fable is optional advice, not an approval authority. Do not consult when the user asks you not to.
 4. If you consulted, critically evaluate the response and include its consultationId in set. Otherwise omit consultationId.
 5. Use 5–15 meaningful steps when appropriate. Keep near-term steps detailed and distant steps coarser. Set at most one step to in_progress.
-6. After the plan is saved, continue the task normally without an approval gate. Keep the plan current with the plan tool at step boundaries and whenever the structure changes.
+6. Give every step concrete, verifiable acceptance criteria. Give a step status done only after every criterion has been verified; completing the step checks its full Definition of Done in the dashboard.
+7. After the plan is saved, continue the task normally without an approval gate. Keep the plan current with the plan tool at step boundaries and whenever the structure changes.
 </plan-workflow>`;
 }
 
@@ -79,6 +80,7 @@ export function buildPlanContext(
 				? `Current: none; next ready: ${ready[0].step.id} — ${ready[0].step.title}`
 				: "Current: complete",
 		`Ready: ${ready.map((view) => view.step.id).join(", ") || "none"}`,
+		"Give a step status done through plan set or progress only after every acceptance criterion has been verified. A done step is displayed with its full Definition of Done checked; unfinished and superseded steps remain unchecked.",
 	];
 
 	if (level >= 1) {

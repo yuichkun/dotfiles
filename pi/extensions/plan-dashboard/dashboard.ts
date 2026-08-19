@@ -1184,10 +1184,11 @@ export class PlanDashboardComponent extends BaseModal<void> {
 		}
 		lines.push("");
 		lines.push(` ${this.sectionTitle("DEFINITION OF DONE")}`);
+		const definitionDone = view.status === "done";
 		for (const criterion of view.step.acceptance) {
 			this.pushWrappedBullet(
 				lines,
-				paint(this.theme, "secondary", "□ "),
+				paint(this.theme, "secondary", definitionDone ? "✓ " : "□ "),
 				criterion,
 				width,
 				"primary",
