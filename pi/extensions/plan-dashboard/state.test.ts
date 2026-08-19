@@ -31,6 +31,41 @@ const consultation: PlanConsultation = {
 	createdAt: TEST_PLAN.createdAt,
 };
 
+const secondRequest: PlanRequest = {
+	schemaVersion: 1,
+	id: "request-second",
+	task: "Implement a second feature",
+	createdAt: "2026-01-02T00:00:00.000Z",
+};
+
+const SECOND_PLAN = {
+	...TEST_PLAN,
+	id: "plan-second",
+	requestId: secondRequest.id,
+	request: secondRequest.task,
+	title: "Second Plan",
+	revision: 1,
+	createdAt: secondRequest.createdAt,
+	updatedAt: secondRequest.createdAt,
+};
+
+const thirdRequest: PlanRequest = {
+	schemaVersion: 1,
+	id: "request-third",
+	task: "Implement a third feature",
+	createdAt: "2026-01-03T00:00:00.000Z",
+};
+
+const THIRD_PLAN = {
+	...SECOND_PLAN,
+	id: "plan-third",
+	requestId: thirdRequest.id,
+	request: thirdRequest.task,
+	title: "Third Plan",
+	createdAt: thirdRequest.createdAt,
+	updatedAt: thirdRequest.createdAt,
+};
+
 function entry(value: object): SessionEntry {
 	return value as SessionEntry;
 }
@@ -186,6 +221,63 @@ test("treats a request without a plan snapshot as pending", () => {
 	assert.equal(runtime.isEnabled(), true);
 });
 
+test("restores the latest plan as current and earlier plans as history", () => {
+	const runtime = new PlanRuntime();
+	const latestFirstPlan = {
+		...TEST_PLAN,
+		revision: TEST_PLAN.revision + 1,
+		changeReason: "Final first-plan update",
+		updatedAt: "2026-01-01T01:00:00.000Z",
+	};
+	const requestEntry = (value: PlanRequest) =>
+		entry({
+			type: "custom",
+			customType: PLAN_REQUEST_ENTRY,
+			data: value,
+		});
+	const planEntry = (plan: typeof TEST_PLAN) =>
+		entry({
+			type: "message",
+			message: {
+				role: "toolResult",
+				toolName: "plan",
+				details: { kind: "plan", operation: "set", plan },
+				isError: false,
+			},
+		});
+
+	runtime.restore([
+		requestEntry(request),
+		planEntry(TEST_PLAN),
+		planEntry(latestFirstPlan),
+		requestEntry(secondRequest),
+		planEntry(SECOND_PLAN),
+		requestEntry(thirdRequest),
+		planEntry(THIRD_PLAN),
+	]);
+	assert.equal(runtime.getPlan()?.id, THIRD_PLAN.id);
+	assert.equal(runtime.getPendingRequest(), undefined);
+	assert.deepEqual(runtime.getPlanHistory().map((plan) => plan.id), [
+		SECOND_PLAN.id,
+		TEST_PLAN.id,
+	]);
+	assert.equal(runtime.getPlanHistory()[0]?.revision, SECOND_PLAN.revision);
+	assert.equal(runtime.getPlanHistory()[1]?.revision, latestFirstPlan.revision);
+});
+
+test("keeps the previous plan in history while a new request is pending", () => {
+	const runtime = new PlanRuntime();
+	runtime.applyPlan(TEST_PLAN);
+	runtime.setRequest(secondRequest);
+	assert.equal(runtime.getPlan(), undefined);
+	assert.equal(runtime.getPendingRequest()?.id, secondRequest.id);
+	assert.equal(runtime.getPlanHistory()[0]?.id, TEST_PLAN.id);
+
+	runtime.applyPlan(SECOND_PLAN);
+	assert.equal(runtime.getPlan()?.id, SECOND_PLAN.id);
+	assert.equal(runtime.getPlanHistory()[0]?.id, TEST_PLAN.id);
+});
+
 test("never displays an invalid latest snapshot as plausible progress", () => {
 	const runtime = new PlanRuntime();
 	const invalid = { ...TEST_PLAN, schemaVersion: 99 };
@@ -218,6 +310,39 @@ test("never displays an invalid latest snapshot as plausible progress", () => {
 	assert.equal(runtime.getPlan(), undefined);
 	assert.equal(runtime.isEnabled(), false);
 	assert.match(runtime.getState().error ?? "", /Unsupported plan schema/);
+});
+
+test("clears invalid snapshot errors when a later request starts", () => {
+	const runtime = new PlanRuntime();
+	runtime.restore([
+		entry({
+			type: "custom",
+			customType: PLAN_REQUEST_ENTRY,
+			data: request,
+		}),
+		entry({
+			type: "message",
+			message: {
+				role: "toolResult",
+				toolName: "plan",
+				details: {
+					kind: "plan",
+					operation: "set",
+					plan: { ...TEST_PLAN, schemaVersion: 99 },
+				},
+				isError: false,
+			},
+		}),
+		entry({
+			type: "custom",
+			customType: PLAN_REQUEST_ENTRY,
+			data: secondRequest,
+		}),
+	]);
+	assert.equal(runtime.getState().error, undefined);
+	assert.equal(runtime.getPlan(), undefined);
+	assert.equal(runtime.getPendingRequest()?.id, secondRequest.id);
+	assert.equal(runtime.getPlanHistory().length, 0);
 });
 
 test("replays branch-local controls and freezes staleness while paused", () => {

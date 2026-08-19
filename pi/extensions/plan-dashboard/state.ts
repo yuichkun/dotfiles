@@ -74,6 +74,8 @@ export type PlanToolDetails =
 export interface PlanRuntimeState {
 	request?: PlanRequest;
 	plan?: Plan;
+	/** Optional so existing buildPlanContext state literals remain source-compatible; PlanRuntime normalizes it to []. */
+	history?: readonly Plan[];
 	enabled: boolean;
 	workSinceUpdate: number;
 	turnsSinceUpdate: number;
@@ -83,6 +85,12 @@ export interface PlanRuntimeState {
 type RuntimeListener = (state: Readonly<PlanRuntimeState>) => void;
 
 const TRACKED_WORK_TOOLS = new Set(["edit", "write", "bash"]);
+
+function prependHistory(history: readonly Plan[], plan: Plan): Plan[] {
+	// Keep one latest valid full snapshot per prior request boundary. History is
+	// in-memory only and intentionally uncapped across those boundaries.
+	return [plan, ...history];
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null;
@@ -175,6 +183,7 @@ export function isPlanToolDetails(value: unknown): value is PlanToolDetails {
 
 export class PlanRuntime {
 	private state: PlanRuntimeState = {
+		history: [],
 		enabled: false,
 		workSinceUpdate: 0,
 		turnsSinceUpdate: 0,
@@ -188,6 +197,10 @@ export class PlanRuntime {
 
 	getPlan(): Plan | undefined {
 		return this.state.plan;
+	}
+
+	getPlanHistory(): readonly Plan[] {
+		return this.state.history ?? [];
 	}
 
 	isEnabled(): boolean {
@@ -211,6 +224,7 @@ export class PlanRuntime {
 
 	restore(entries: readonly SessionEntry[]): void {
 		this.state = {
+			history: [],
 			enabled: false,
 			workSinceUpdate: 0,
 			turnsSinceUpdate: 0,
@@ -233,7 +247,18 @@ export class PlanRuntime {
 				entry.customType === PLAN_REQUEST_ENTRY &&
 				isPlanRequest(entry.data)
 			) {
+				if (
+					this.state.plan &&
+					this.state.plan.requestId !== entry.data.id
+				) {
+					this.state.history = prependHistory(
+						this.state.history ?? [],
+						this.state.plan,
+					);
+					this.state.plan = undefined;
+				}
 				this.state.request = entry.data;
+				this.state.error = undefined;
 				if (!controlSeen) this.state.enabled = true;
 				continue;
 			}
@@ -266,9 +291,17 @@ export class PlanRuntime {
 	}
 
 	setRequest(request: PlanRequest): void {
+		const current = this.state.plan;
+		const replaceCurrent =
+			current !== undefined && current.requestId !== request.id;
 		this.state = {
 			...this.state,
 			request,
+			plan: replaceCurrent ? undefined : current,
+			history:
+				replaceCurrent && current
+					? prependHistory(this.state.history ?? [], current)
+					: this.state.history ?? [],
 			enabled: true,
 			error: undefined,
 		};

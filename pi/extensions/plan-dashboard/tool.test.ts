@@ -219,6 +219,51 @@ test("creates an initial plan without consultation", async () => {
 	assert.equal(execArgs.length, 0);
 });
 
+test("creates a fresh plan from baseRevision zero after moving the previous plan to history", async () => {
+	const { runtime, tool } = setup();
+	runtime.applyPlan(TEST_PLAN);
+	runtime.setRequest({
+		schemaVersion: 1,
+		id: "request-next",
+		task: "Implement the next feature",
+		createdAt: "2026-01-02T00:00:00.000Z",
+	});
+	assert.equal(runtime.getPlan(), undefined);
+	assert.equal(runtime.getPlanHistory()[0]?.id, TEST_PLAN.id);
+
+	const result = await tool.execute(
+		"set-next",
+		{
+			op: "set",
+			baseRevision: 0,
+			title: "Next plan",
+			objective: "Implement the next feature",
+			reason: "Start a sequential plan",
+			steps: [
+				{
+					id: "N01",
+					phase: "Implementation",
+					title: "Implement next feature",
+					shortTitle: "Implement next",
+					goal: "Complete the next feature",
+					work: ["Implement the feature"],
+					acceptance: ["The feature is verified"],
+					dependsOn: [],
+					relatedFiles: [],
+					status: "in_progress",
+				},
+			],
+		},
+		undefined,
+		undefined,
+		context,
+	);
+	assert.equal(result.details.kind, "plan");
+	assert.equal(runtime.getPlan()?.revision, 1);
+	assert.equal(runtime.getPlan()?.requestId, "request-next");
+	assert.equal(runtime.getPlanHistory()[0]?.id, TEST_PLAN.id);
+});
+
 test("returns full details for steps compacted automatically by set", async () => {
 	const { runtime, tool } = setup();
 	const steps = Array.from({ length: 21 }, (_, index) => ({
