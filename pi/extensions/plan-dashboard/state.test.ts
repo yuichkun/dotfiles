@@ -7,6 +7,7 @@ import {
 	PLAN_CONTROL_ENTRY,
 	PLAN_REQUEST_ENTRY,
 	planHasUnfinishedWork,
+	planIsComplete,
 	PlanRuntime,
 	type PlanConsultation,
 	type PlanRequest,
@@ -353,7 +354,7 @@ test("restores a Palette replacement as pending with the prior Plan in history",
 	assert.equal(runtime.isEnabled(), true);
 });
 
-test("detects unfinished work without treating terminal Plans as unfinished", () => {
+test("distinguishes unfinished, completed, and fully superseded Plans", () => {
 	const completed = {
 		...TEST_PLAN,
 		steps: TEST_PLAN.steps.map((step) => ({
@@ -368,10 +369,27 @@ test("detects unfinished work without treating terminal Plans as unfinished", ()
 			status: "superseded" as const,
 		})),
 	};
+	const archivedOnly = {
+		...TEST_PLAN,
+		steps: [],
+		archivedSteps: [
+			{
+				id: "S01",
+				phase: "調査",
+				status: "done" as const,
+				compactedAt: TEST_PLAN.updatedAt,
+			},
+		],
+	};
 
 	assert.equal(planHasUnfinishedWork(TEST_PLAN), true);
+	assert.equal(planIsComplete(TEST_PLAN), false);
 	assert.equal(planHasUnfinishedWork(completed), false);
+	assert.equal(planIsComplete(completed), true);
 	assert.equal(planHasUnfinishedWork(superseded), false);
+	assert.equal(planIsComplete(superseded), false);
+	assert.equal(planHasUnfinishedWork(archivedOnly), false);
+	assert.equal(planIsComplete(archivedOnly), true);
 });
 
 test("never displays an invalid latest snapshot as plausible progress", () => {

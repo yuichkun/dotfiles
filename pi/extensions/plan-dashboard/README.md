@@ -96,7 +96,10 @@ Plan作成要求とON/OFFはCustom Entry、Fable consultationとPlan snapshotは
 ## Dashboard
 
 - `/palette` → `Open Current Plan…`
+- `/palette` → `Open Plan History…`
 - `/plan-dashboard`
+
+`Open Plan History…`は同じbranchの過去Planをnewest-firstで選択し、`HISTORY` marker付きのread-only Dashboardで表示する。History表示はcurrent Plan、pause状態、active toolを変更しない。
 
 画面最上部のfixed Overlayにはprogress barと現在Stepを表示する。Planがない、またはOFFのPi Session branchではOverlayを表示しない。staleness thresholdを超えた場合は、最後の更新以降のwork/turn数を表示する。
 

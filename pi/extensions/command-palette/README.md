@@ -8,6 +8,7 @@ Pi内の決定的なローカルUI操作を、対話・prompt・skillとは別�
 
 - `Start New Living Plan…`：task editorから新しいLiving Planを開始する
 - `Open Current Plan…`：current PlanのDashboardを開く
+- `Open Plan History…`：同じbranchの過去Planを選んで開く
 - `Pause Living Plan` / `Resume Living Plan`：Plan workflowが存在するとき、現在状態に合う片方だけを表示する
 - `Open in VS Code…`：独立したWorkspace Pickerを開き、現在または別のWorkspaceを選択する
 

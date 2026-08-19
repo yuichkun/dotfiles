@@ -148,6 +148,7 @@ test("shows only controls valid for the current Plan state", async () => {
 	assert.deepEqual(await availability(empty.registry, empty.context()), {
 		"plan.start": true,
 		"plan.current": false,
+		"plan.history": false,
 		"plan.pause": false,
 		"plan.resume": false,
 	});
@@ -156,6 +157,7 @@ test("shows only controls valid for the current Plan state", async () => {
 	assert.deepEqual(await availability(pending.registry, pending.context()), {
 		"plan.start": true,
 		"plan.current": false,
+		"plan.history": false,
 		"plan.pause": true,
 		"plan.resume": false,
 	});
@@ -166,6 +168,7 @@ test("shows only controls valid for the current Plan state", async () => {
 		{
 			"plan.start": true,
 			"plan.current": false,
+			"plan.history": false,
 			"plan.pause": false,
 			"plan.resume": true,
 		},
@@ -175,6 +178,7 @@ test("shows only controls valid for the current Plan state", async () => {
 	assert.deepEqual(await availability(active.registry, active.context()), {
 		"plan.start": true,
 		"plan.current": true,
+		"plan.history": false,
 		"plan.pause": true,
 		"plan.resume": false,
 	});
@@ -183,9 +187,51 @@ test("shows only controls valid for the current Plan state", async () => {
 	assert.deepEqual(await availability(paused.registry, paused.context()), {
 		"plan.start": true,
 		"plan.current": true,
+		"plan.history": false,
 		"plan.pause": false,
 		"plan.resume": true,
 	});
+	const secondPlan = {
+		...TEST_PLAN,
+		id: "plan-second",
+		requestId: "request-pending",
+		request: "Pending Plan",
+		title: "Second Plan",
+	};
+	const withHistory = setupStart([
+		planEntry(),
+		requestEntry(),
+		entry({
+			type: "message",
+			message: {
+				role: "toolResult",
+				toolName: "plan",
+				details: { kind: "plan", operation: "set", plan: secondPlan },
+				isError: false,
+			},
+		}),
+	]);
+	assert.deepEqual(
+		await availability(withHistory.registry, withHistory.context()),
+		{
+			"plan.start": true,
+			"plan.current": true,
+			"plan.history": true,
+			"plan.pause": true,
+			"plan.resume": false,
+		},
+	);
+	const historyAction = withHistory.registry.get("plan.history");
+	assert.ok(historyAction);
+	let selectorTitle = "";
+	const historyContext = withHistory.context();
+	historyContext.ui.select = async (title: string) => {
+		selectorTitle = title;
+		return undefined;
+	};
+	await historyAction.run(historyContext);
+	assert.equal(selectorTitle, "Open Plan History");
+
 	assert.equal(paused.registry.get("plan.toggle"), undefined);
 	assert.equal(paused.registry.get("plan.dashboard"), undefined);
 });

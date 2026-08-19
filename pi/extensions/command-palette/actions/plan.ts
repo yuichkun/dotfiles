@@ -4,6 +4,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { persistPlanEnabled } from "../../plan-dashboard/control.ts";
 import { openPlanDashboard } from "../../plan-dashboard/dashboard.ts";
+import { openPlanHistory } from "../../plan-dashboard/history.ts";
 import {
 	newPlanNeedsConfirmation,
 	startNewPlanRequest,
@@ -115,6 +116,15 @@ export function registerPlanActions(
 		],
 		isAvailable: (ctx) => Boolean(restoreRuntime(ctx).getPlan()),
 		run: (ctx) => openPlanDashboard(ctx),
+	});
+
+	registry.register({
+		id: "plan.history",
+		title: "Open Plan History…",
+		description: "Choose an earlier Plan from this branch",
+		keywords: ["plan", "planning", "history", "previous", "archive"],
+		isAvailable: (ctx) => restoreRuntime(ctx).getPlanHistory().length > 0,
+		run: openPlanHistory,
 	});
 
 	registry.register({

@@ -463,6 +463,7 @@ export class PlanDashboardComponent extends BaseModal<void> {
 	private readonly workSinceUpdate: number;
 	private readonly turnsSinceUpdate: number;
 	private readonly enabled: boolean;
+	private readonly historical: boolean;
 	private readonly views: readonly PlanStepView[];
 	private readonly viewsById: ReadonlyMap<string, PlanStepView>;
 	private selectedStepId = "";
@@ -484,12 +485,14 @@ export class PlanDashboardComponent extends BaseModal<void> {
 			turnsSinceUpdate: 0,
 		},
 		enabled = true,
+		historical = false,
 	) {
 		super(context);
 		this.plan = plan;
 		this.workSinceUpdate = staleness.workSinceUpdate;
 		this.turnsSinceUpdate = staleness.turnsSinceUpdate;
 		this.enabled = enabled;
+		this.historical = historical;
 		this.views = buildPlanViews(plan);
 		this.viewsById = new Map(
 			this.views.map((view) => [view.step.id, view]),
@@ -576,7 +579,8 @@ export class PlanDashboardComponent extends BaseModal<void> {
 			: this.renderOverview(width);
 	}
 
-	private pausedMarker(): string {
+	private planMarker(): string {
+		if (this.historical) return " · HISTORY";
 		return this.enabled ? "" : " · PAUSED";
 	}
 
@@ -585,7 +589,7 @@ export class PlanDashboardComponent extends BaseModal<void> {
 		const overview = this.renderPlanOverview(this.getOverviewLineLimit());
 		const bodyHeight = this.getOverviewBodyHeight(overview.length);
 		const lines = [
-			frame.top(`Plan Dashboard${this.pausedMarker()} · ${this.plan.title}`),
+			frame.top(`Plan Dashboard${this.planMarker()} · ${this.plan.title}`),
 			...overview.map((line) => frame.row(line)),
 			frame.separator(),
 			frame.row(this.renderSummaryLine(frame.innerWidth)),
@@ -1123,7 +1127,7 @@ export class PlanDashboardComponent extends BaseModal<void> {
 		const frame = new ModalFrame(this.theme, width);
 		const selected = this.getSelectedView();
 		if (!selected) {
-			return [frame.top(`Plan Step${this.pausedMarker()}`), frame.bottom()];
+			return [frame.top(`Plan Step${this.planMarker()}`), frame.bottom()];
 		}
 		const bodyHeight = this.getDetailBodyHeight();
 		const detailLines = this.buildDetailLines(selected, frame.innerWidth);
@@ -1135,7 +1139,7 @@ export class PlanDashboardComponent extends BaseModal<void> {
 		);
 		while (visible.length < bodyHeight) visible.push("");
 		const lines = [
-			frame.top(`Plan Step${this.pausedMarker()} · ${selected.step.id}`),
+			frame.top(`Plan Step${this.planMarker()} · ${selected.step.id}`),
 			frame.row(
 				` ${paint(this.theme, statusRole(selected.status), `${statusIcon(selected.status)} ${statusLabel(selected.status)}`)}  ${paint(this.theme, "tertiary", `${selected.step.phase} · updated ${new Date(selected.step.updatedAt).toLocaleString()} by ${selected.step.updatedBy}`)}`,
 			),
@@ -1266,7 +1270,7 @@ export class PlanDashboardComponent extends BaseModal<void> {
 		);
 		while (visible.length < bodyHeight) visible.push("");
 		const lines = [
-			frame.top(`Plan Archive${this.pausedMarker()} · ${this.plan.title}`),
+			frame.top(`Plan Archive${this.planMarker()} · ${this.plan.title}`),
 			frame.separator(),
 		];
 		for (const line of visible) lines.push(frame.row(line));
@@ -1392,6 +1396,7 @@ export class PlanDashboardComponent extends BaseModal<void> {
 export async function openPlanDashboard(
 	ctx: ExtensionContext,
 	plan?: Plan,
+	options: { historical?: boolean } = {},
 ): Promise<void> {
 	let resolvedPlan = plan;
 	let restoreError: string | undefined;
@@ -1421,7 +1426,13 @@ export async function openPlanDashboard(
 	await showModal<void>(
 		ctx,
 		(modalContext) =>
-			new PlanDashboardComponent(resolvedPlan, modalContext, staleness, enabled),
+			new PlanDashboardComponent(
+				resolvedPlan,
+				modalContext,
+				staleness,
+				enabled,
+				options.historical ?? false,
+			),
 		{
 			overlayOptions: {
 				width: "100%",

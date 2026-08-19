@@ -29,6 +29,7 @@ function createComponent(
 	themeOverride?: Theme,
 	plan = TEST_PLAN,
 	enabled = true,
+	historical = false,
 ): PlanDashboardComponent {
 	const theme = themeOverride ?? ({
 		fg: (_color: string, text: string) => text,
@@ -53,7 +54,13 @@ function createComponent(
 		keybindings,
 		close: () => {},
 	};
-	return new PlanDashboardComponent(plan, context, staleness, enabled);
+	return new PlanDashboardComponent(
+		plan,
+		context,
+		staleness,
+		enabled,
+		historical,
+	);
 }
 
 function assertWidthSafe(lines: readonly string[], width: number): void {
@@ -63,6 +70,39 @@ function assertWidthSafe(lines: readonly string[], width: number): void {
 			`line ${index + 1} is ${visibleWidth(line)} columns at width ${width}: ${line}`,
 		);
 	}
+}
+
+async function renderDashboardEntryPoint(
+	branch: readonly SessionEntry[],
+): Promise<string> {
+	let output = "";
+	const theme = {
+		fg: (_color: string, text: string) => text,
+		bg: (_color: string, text: string) => text,
+		bold: (text: string) => text,
+		inverse: (text: string) => text,
+	} as unknown as Theme;
+	const keybindings = {
+		matches: (data: string, action: string) => keyByAction[action] === data,
+	} as unknown as KeybindingsManager;
+	const tui = {
+		terminal: { rows: 30, columns: 120 },
+		requestRender: () => {},
+	} as unknown as TUI;
+	const ctx = {
+		mode: "tui",
+		sessionManager: { getBranch: () => branch },
+		ui: {
+			notify: () => {},
+			custom: async (factory: Function) => {
+				const component = factory(tui, theme, keybindings, () => {});
+				output = component.render(120).join("\n");
+				return undefined;
+			},
+		},
+	} as unknown as ExtensionContext;
+	await openPlanDashboard(ctx);
+	return output;
 }
 
 test("renders width-safe overview layouts across terminal sizes", () => {
@@ -672,6 +712,39 @@ test("marks a paused plan without hiding its dashboard", () => {
 	assert.match(component.render(120).join("\n"), /Plan Step · PAUSED · S04/);
 });
 
+test("marks historical plans without presenting them as paused current plans", () => {
+	const component = createComponent(
+		30,
+		{ workSinceUpdate: 0, turnsSinceUpdate: 0 },
+		undefined,
+		TEST_PLAN,
+		false,
+		true,
+	);
+	const overview = component.render(120).join("\n");
+	assert.match(overview, /Plan Dashboard · HISTORY · Living Plan実装/);
+	assert.doesNotMatch(overview, /PAUSED/);
+	component.handleInput("\r");
+	assert.match(component.render(120).join("\n"), /Plan Step · HISTORY · S04/);
+});
+
+test("keeps an active current Plan unmarked through the dashboard entry point", async () => {
+	const branch = [
+		{
+			type: "message",
+			message: {
+				role: "toolResult",
+				toolName: "plan",
+				details: { kind: "plan", operation: "set", plan: TEST_PLAN },
+				isError: false,
+			},
+		},
+	] as unknown as SessionEntry[];
+	const output = await renderDashboardEntryPoint(branch);
+	assert.match(output, /Plan Dashboard · Living Plan実装/);
+	assert.doesNotMatch(output, /HISTORY|PAUSED/);
+});
+
 test("restores paused state through the dashboard entry point", async () => {
 	const branch = [
 		{
@@ -694,34 +767,9 @@ test("restores paused state through the dashboard entry point", async () => {
 			},
 		},
 	] as unknown as SessionEntry[];
-	let output = "";
-	const theme = {
-		fg: (_color: string, text: string) => text,
-		bg: (_color: string, text: string) => text,
-		bold: (text: string) => text,
-		inverse: (text: string) => text,
-	} as unknown as Theme;
-	const keybindings = {
-		matches: (data: string, action: string) => keyByAction[action] === data,
-	} as unknown as KeybindingsManager;
-	const tui = {
-		terminal: { rows: 30, columns: 120 },
-		requestRender: () => {},
-	} as unknown as TUI;
-	const ctx = {
-		mode: "tui",
-		sessionManager: { getBranch: () => branch },
-		ui: {
-			notify: () => {},
-			custom: async (factory: Function) => {
-				const component = factory(tui, theme, keybindings, () => {});
-				output = component.render(120).join("\n");
-				return undefined;
-			},
-		},
-	} as unknown as ExtensionContext;
-	await openPlanDashboard(ctx);
+	const output = await renderDashboardEntryPoint(branch);
 	assert.match(output, /Plan Dashboard · PAUSED · Living Plan実装/);
+	assert.doesNotMatch(output, /HISTORY/);
 });
 
 test("opens compacted history grouped by phase", () => {

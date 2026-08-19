@@ -105,6 +105,16 @@ export function planHasUnfinishedWork(plan: Plan): boolean {
 	);
 }
 
+export function planIsComplete(plan: Plan): boolean {
+	const steps = [...plan.archivedSteps, ...plan.steps];
+	return (
+		steps.some((step) => step.status === "done") &&
+		steps.every(
+			(step) => step.status === "done" || step.status === "superseded",
+		)
+	);
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null;
 }
