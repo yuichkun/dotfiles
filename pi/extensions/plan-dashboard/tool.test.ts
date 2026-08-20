@@ -27,7 +27,11 @@ interface ExecutablePlanTool {
 		content: Array<{ type: "text"; text: string }>;
 		details: PlanToolDetails;
 	}>;
-	renderCall(args: { op: string }, theme: Theme): Renderable;
+	renderCall(
+		args: { op: string; done?: string; start?: string },
+		theme: Theme,
+		context: { expanded: boolean; isError: boolean },
+	): Renderable;
 	renderResult(
 		result: {
 			content: Array<{ type: "text"; text: string }>;
@@ -35,6 +39,7 @@ interface ExecutablePlanTool {
 		},
 		options: { expanded: boolean; isPartial: boolean },
 		theme: Theme,
+		context: { expanded: boolean; isError: boolean },
 	): Renderable;
 }
 
@@ -74,6 +79,8 @@ function setup(withRequest = true): {
 }
 
 const context = {} as ExtensionContext;
+const collapsedRenderContext = { expanded: false, isError: false };
+const expandedRenderContext = { expanded: true, isError: false };
 
 test("optionally consumes a branch-local Fable consultation for initial set", async () => {
 	const { runtime, tool, execArgs } = setup();
@@ -145,44 +152,170 @@ test("optionally consumes a branch-local Fable consultation for initial set", as
 	assert.equal(getResult.details.kind, "inspection");
 });
 
-test("rendering keeps completion neutral and uses a self shell", () => {
+test("hides routine Plan rendering until tools are expanded", () => {
 	const { tool } = setup();
 	assert.equal(tool.renderShell, "self");
 	const theme = {
 		fg: (color: string, text: string) => `<${color}>${text}</${color}>`,
 		bold: (text: string) => text,
 	} as unknown as Theme;
+	const consultation = {
+		schemaVersion: 1 as const,
+		id: "consultation-1",
+		requestId: "request-1",
+		model: "fable" as const,
+		effort: "max" as const,
+		facts: [],
+		constraints: [],
+		openQuestions: [],
+		response: "Independent advice",
+		createdAt: "2026-01-01T00:00:00.000Z",
+	};
+
+	assert.deepEqual(
+		tool.renderCall({ op: "get" }, theme, collapsedRenderContext).render(120),
+		[],
+	);
+	assert.deepEqual(
+		tool.renderResult(
+			{ content: [], details: { kind: "inspection", plan: TEST_PLAN } },
+			{ expanded: false, isPartial: true },
+			theme,
+			collapsedRenderContext,
+		).render(120),
+		[],
+	);
+	assert.deepEqual(
+		tool.renderResult(
+			{ content: [], details: { kind: "inspection", plan: TEST_PLAN } },
+			{ expanded: false, isPartial: false },
+			theme,
+			collapsedRenderContext,
+		).render(120),
+		[],
+	);
+	assert.deepEqual(
+		tool.renderResult(
+			{
+				content: [],
+				details: { kind: "plan", operation: "set", plan: TEST_PLAN },
+			},
+			{ expanded: false, isPartial: false },
+			theme,
+			collapsedRenderContext,
+		).render(120),
+		[],
+	);
+	assert.deepEqual(
+		tool.renderResult(
+			{
+				content: [{ type: "text", text: "Independent advice" }],
+				details: { kind: "consultation", consultation },
+			},
+			{ expanded: false, isPartial: false },
+			theme,
+			collapsedRenderContext,
+		).render(120),
+		[],
+	);
+
 	const call = tool
-		.renderCall({ op: "get" }, theme)
+		.renderCall({ op: "get" }, theme, expandedRenderContext)
 		.render(120)
 		.join("\n")
 		.trimEnd();
 	assert.equal(call, "<text>plan</text> <muted>get</muted>");
-
+	const progressCall = tool
+		.renderCall(
+			{ op: "progress", done: "S04", start: "S05" },
+			theme,
+			expandedRenderContext,
+		)
+		.render(120)
+		.join("\n")
+		.trimEnd();
+	assert.equal(progressCall, "<text>plan</text> <muted>done S04 · start S05</muted>");
 	const partial = tool.renderResult(
 		{ content: [], details: { kind: "inspection", plan: TEST_PLAN } },
-		{ expanded: false, isPartial: true },
+		{ expanded: true, isPartial: true },
 		theme,
+		expandedRenderContext,
 	).render(120).join("\n").trimEnd();
 	assert.equal(partial, "<accent>Updating plan…</accent>");
-	assert.ok(!partial.includes("<warning>"));
-
 	const inspection = tool.renderResult(
 		{ content: [], details: { kind: "inspection", plan: TEST_PLAN } },
-		{ expanded: false, isPartial: false },
+		{ expanded: true, isPartial: false },
 		theme,
+		expandedRenderContext,
 	).render(120).join("\n").trimEnd();
 	assert.equal(inspection, "<text>Plan r4 inspected</text>");
-
 	const completed = tool.renderResult(
 		{
 			content: [],
 			details: { kind: "plan", operation: "set", plan: TEST_PLAN },
 		},
-		{ expanded: false, isPartial: false },
+		{ expanded: true, isPartial: false },
 		theme,
+		expandedRenderContext,
 	).render(120).join("\n").trimEnd();
 	assert.equal(completed, "<text>● Plan r4 · set</text>");
+	const progress = tool.renderResult(
+		{
+			content: [],
+			details: { kind: "plan", operation: "progress", plan: TEST_PLAN },
+		},
+		{ expanded: true, isPartial: false },
+		theme,
+		expandedRenderContext,
+	).render(120).join("\n").trimEnd();
+	assert.equal(progress, "<text>● Plan r4 · progress</text>");
+	const consulted = tool.renderResult(
+		{
+			content: [{ type: "text", text: "Independent advice" }],
+			details: { kind: "consultation", consultation },
+		},
+		{ expanded: true, isPartial: false },
+		theme,
+		expandedRenderContext,
+	).render(120).join("\n").trimEnd();
+	assert.equal(consulted, "Independent advice");
+});
+
+test("keeps Plan failures visible while collapsed", () => {
+	const { tool } = setup();
+	const theme = {
+		fg: (color: string, text: string) => `<${color}>${text}</${color}>`,
+		bold: (text: string) => text,
+	} as unknown as Theme;
+	const missingDetails = tool.renderResult(
+		{ content: [{ type: "text", text: "stale revision" }] },
+		{ expanded: false, isPartial: false },
+		theme,
+		{ ...collapsedRenderContext, isError: true },
+	).render(120).join("\n").trimEnd();
+	assert.equal(missingDetails, "<error>stale revision</error>");
+
+	const flagged = tool.renderResult(
+		{
+			content: [{ type: "text", text: "invalid plan" }],
+			details: { kind: "plan", operation: "set", plan: TEST_PLAN },
+		},
+		{ expanded: false, isPartial: false },
+		theme,
+		{ ...collapsedRenderContext, isError: true },
+	).render(120).join("\n").trimEnd();
+	assert.equal(flagged, "<error>invalid plan</error>");
+
+	const partial = tool.renderResult(
+		{
+			content: [{ type: "text", text: "stream failed" }],
+			details: { kind: "inspection", plan: TEST_PLAN },
+		},
+		{ expanded: false, isPartial: true },
+		theme,
+		{ ...collapsedRenderContext, isError: true },
+	).render(120).join("\n").trimEnd();
+	assert.equal(partial, "<error>stream failed</error>");
 });
 
 test("creates an initial plan without consultation", async () => {
@@ -354,14 +487,32 @@ test("compacts resolved steps without clearing staleness", async () => {
 		fg: (color: string, text: string) => `<${color}>${text}</${color}>`,
 		bold: (text: string) => text,
 	} as unknown as Theme;
+	assert.deepEqual(
+		tool.renderCall({ op: "compact" }, theme, collapsedRenderContext).render(120),
+		[],
+	);
+	assert.deepEqual(
+		tool.renderResult(
+			result,
+			{ expanded: false, isPartial: false },
+			theme,
+			collapsedRenderContext,
+		).render(120),
+		[],
+	);
 	const renderedCall = tool
-		.renderCall({ op: "compact" }, theme)
+		.renderCall({ op: "compact" }, theme, expandedRenderContext)
 		.render(120)
 		.join("\n")
 		.trimEnd();
 	assert.equal(renderedCall, "<text>plan</text> <muted>compact</muted>");
 	const rendered = tool
-		.renderResult(result, { expanded: false, isPartial: false }, theme)
+		.renderResult(
+			result,
+			{ expanded: true, isPartial: false },
+			theme,
+			expandedRenderContext,
+		)
 		.render(120)
 		.join("\n")
 		.trimEnd();

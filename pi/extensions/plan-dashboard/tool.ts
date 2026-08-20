@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Text } from "@earendil-works/pi-tui";
+import { Container, Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { paint } from "../shared/color-policy.ts";
 import { consultFable } from "./advisor.ts";
@@ -359,7 +359,8 @@ export function registerPlanTool(
 				}
 			}
 		},
-		renderCall(args, theme) {
+		renderCall(args, theme, context) {
+			if (!context.expanded) return new Container();
 			const suffix =
 				args.op === "progress"
 					? [args.done ? `done ${args.done}` : "", args.start ? `start ${args.start}` : ""]
@@ -372,11 +373,15 @@ export function registerPlanTool(
 				0,
 			);
 		},
-		renderResult(result, { expanded, isPartial }, theme) {
-			if (isPartial) return new Text(paint(theme, "focus", "Updating plan…"), 0, 0);
+		renderResult(result, { expanded, isPartial }, theme, context) {
+			if (isPartial && !context.isError) {
+				return expanded
+					? new Text(paint(theme, "focus", "Updating plan…"), 0, 0)
+					: new Container();
+			}
 			const content = result.content.find((item) => item.type === "text");
 			const details = result.details;
-			if (!details) {
+			if (!details || context.isError) {
 				return new Text(
 					paint(
 						theme,
@@ -387,8 +392,8 @@ export function registerPlanTool(
 					0,
 				);
 			}
+			if (!expanded) return new Container();
 			if (
-				expanded &&
 				(details.kind === "consultation" || details.kind === "inspection") &&
 				content?.type === "text"
 			) {
