@@ -29,3 +29,5 @@ Git repository外ではbranch labelを省略する。context usageはstatusで�
 ## 更新とcleanup
 
 model、thinking level、context使用率はactive sessionからrender時に読む。Git statusはsession開始、branch変更、`edit` / `write` / `bash`完了後に更新する。重複refreshはcoalesceし、footerのdispose時にbranch listenerを解除して実行中processをabortする。
+
+描画契約全体は[`../../UI_SPEC.md`](../../UI_SPEC.md)を参照。

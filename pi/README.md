@@ -15,6 +15,17 @@
 ~/dotfiles/pi/install.sh --install-packages
 ```
 
+## UI
+
+表示のretain / on-demand / remove方針と通常幅・狭幅のmockは[`UI_SPEC.md`](UI_SPEC.md)にまとめる。以下はこのcontractが対象とするUI owner。
+
+- `extensions/status-footer/`: cwd、Git branch、model、thinking level、context使用率だけを表示
+- `extensions/tool-ui/`: semantic summaryと高価値factsを残したcompact Tool表示
+- `extensions/plan-dashboard/`: Living Planのfixed progress header、Dashboard、Plan Tool transcript
+- `extensions/quiet-thinking/`: hidden-thinking labelを空にする
+- `settings.json`: active theme、thinking content visibility、fullscreen TUI設定
+- `themes/claude-code-dark.json`: User message panelを含むpalette
+
 ## 管理対象
 
 `pi/install.sh` は、存在するものだけを `~/.pi/agent` に symlink する。
