@@ -87,7 +87,7 @@ Plan作成要求とpause/resume状態はCustom Entry、Fable consultationとPlan
 
 `Open Plan History…`は同じbranchの過去Planをnewest-firstで選択し、`HISTORY` marker付きのread-only Dashboardで表示する。History表示はcurrent Plan、pause状態、active toolを変更しない。
 
-画面最上部のfixed Overlayにはprogress barと現在Stepを表示する。Planがない、またはpausedのPi Session branchではOverlayを表示しない。staleness thresholdを超えた場合は、最後の更新以降のwork/turn数を表示する。
+画面最上部のfixed Overlayは枠付き4行で、上枠にPlan title、1行目にprogress barとdone/total、2行目に現在または次のStep titleを表示する。`PROGRESS` / `NOW` / `NEXT` labelと内部Step IDは表示しない。Planがない、またはpausedのPi Session branchではOverlayを表示しない。staleness thresholdを超えた場合は上枠へ`⚠ STALE`だけを追加し、work/turn数はDashboard本体で確認する。
 
 ### Overview
 

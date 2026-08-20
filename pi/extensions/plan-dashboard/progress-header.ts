@@ -50,7 +50,7 @@ export class PlanProgressHeader {
 				: paint(
 						this.theme,
 						staleness === 2 ? "caution" : "secondary",
-						` · ⚠ STALE ${this.state.workSinceUpdate} work / ${this.state.turnsSinceUpdate} turns`,
+						" · ⚠ STALE",
 					);
 		return [
 			frame.top(`PLAN${staleLabel} · ${this.state.plan.title}`),
@@ -67,11 +67,13 @@ export class PlanProgressHeader {
 		views: readonly PlanStepView[],
 	): string {
 		const summary = summarizePlan(views, this.state.plan.archivedSteps);
-		const label = " PROGRESS  ";
+		const count = `${summary.done}/${summary.total}`;
+		const prefix = " ";
 		const bracketWidth = 2;
+		const gapWidth = 1;
 		const barWidth = Math.max(
-			4,
-			width - visibleWidth(label) - bracketWidth - 1,
+			1,
+			width - visibleWidth(prefix) - bracketWidth - gapWidth - visibleWidth(count),
 		);
 		const resolvedCount = summary.done + summary.superseded;
 		const doneWidth = Math.min(
@@ -94,17 +96,17 @@ export class PlanProgressHeader {
 			paint(this.theme, "tertiary", "━".repeat(supersededWidth)) +
 			paint(this.theme, "focus", "◆".repeat(activeWidth)) +
 			this.theme.fg("borderMuted", "─".repeat(remainingWidth));
-		return `${paint(this.theme, "secondary", label)}[${bar}]`;
+		return `${prefix}[${bar}] ${paint(this.theme, "secondary", count)}`;
 	}
 
 	private renderCurrent(views: readonly PlanStepView[]): string {
 		const current = views.find((view) => view.status === "in_progress");
 		if (current) {
-			return ` ${paint(this.theme, "focus", this.theme.bold("▶ NOW"))}  ${paint(this.theme, "secondary", current.step.id)}  ${paint(this.theme, "primary", this.theme.bold(current.step.title))}`;
+			return ` ${paint(this.theme, "focus", this.theme.bold(current.step.title))}`;
 		}
 		const next = views.find((view) => view.status === "ready");
 		if (next) {
-			return ` ${paint(this.theme, "focus", this.theme.bold("● NEXT"))}  ${paint(this.theme, "secondary", next.step.id)}  ${paint(this.theme, "primary", this.theme.bold(next.step.title))}`;
+			return ` ${paint(this.theme, "focus", this.theme.bold(next.step.title))}`;
 		}
 		return ` ${paint(this.theme, "completed", this.theme.bold("✔ PLAN COMPLETE"))}`;
 	}

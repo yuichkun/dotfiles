@@ -23,22 +23,25 @@ function header(workSinceUpdate = 0, turnsSinceUpdate = 0): PlanProgressHeader {
 	);
 }
 
-test("renders a fixed-size progress bar and current-step line", () => {
+test("renders only title, progress, count, and current-step title", () => {
 	const lines = header().render(120);
+	const output = lines.join("\n");
 	assert.equal(lines.length, 4);
-	assert.match(lines.join("\n"), /PROGRESS/);
-	assert.match(lines.join("\n"), /◆/);
-	assert.match(lines.join("\n"), /▶ NOW  S04/);
-	assert.match(lines.join("\n"), /DAGダッシュボードを実装する/);
-	assert.doesNotMatch(lines.join("\n"), /3\/15/);
-	assert.doesNotMatch(lines.join("\n"), /STALE/);
+	assert.match(output, /PLAN · Living Plan実装/);
+	assert.match(output, /◆/);
+	assert.match(output, /3\/15/);
+	assert.match(output, /DAGダッシュボードを実装する/);
+	assert.doesNotMatch(output, /PROGRESS|NOW|NEXT|S04/);
+	assert.doesNotMatch(output, /STALE/);
 });
 
-test("shows factual staleness only after the threshold", () => {
-	assert.match(header(5, 1).render(120).join("\n"), /STALE 5 work \/ 1 turns/);
+test("shows compact staleness without work or turn counts", () => {
+	const output = header(5, 1).render(120).join("\n");
+	assert.match(output, /⚠ STALE/);
+	assert.doesNotMatch(output, /5 work|1 turns/);
 });
 
-test("uses focus for NOW and NEXT while keeping completion neutral", () => {
+test("uses focus for current and next titles while keeping completion neutral", () => {
 	const tokenTheme = {
 		fg: (color: string, text: string) => `<${color}>${text}</${color}>`,
 		bg: (_color: string, text: string) => text,
@@ -48,8 +51,8 @@ test("uses focus for NOW and NEXT while keeping completion neutral", () => {
 		{ plan: TEST_PLAN, workSinceUpdate: 0, turnsSinceUpdate: 0 },
 		tokenTheme,
 	).render(180).join("\n");
-	assert.match(current, /<accent>▶ NOW<\/accent>/);
-	assert.doesNotMatch(current, /<success>/);
+	assert.match(current, /<accent>DAGダッシュボードを実装する<\/accent>/);
+	assert.doesNotMatch(current, /NOW|S04|<success>/);
 
 	const nextPlan = {
 		...TEST_PLAN,
@@ -61,8 +64,8 @@ test("uses focus for NOW and NEXT while keeping completion neutral", () => {
 		{ plan: nextPlan, workSinceUpdate: 0, turnsSinceUpdate: 0 },
 		tokenTheme,
 	).render(180).join("\n");
-	assert.match(next, /<accent>● NEXT<\/accent>/);
-	assert.doesNotMatch(next, /<success>● NEXT<\/success>/);
+	assert.match(next, /<accent>評価基準を決める<\/accent>/);
+	assert.doesNotMatch(next, /NEXT|S05|<success>/);
 });
 
 test("separates neutral completed progress from tertiary superseded progress", () => {
@@ -137,6 +140,7 @@ test("keeps unbounded compacted totals width-safe", () => {
 			{ plan, workSinceUpdate: 0, turnsSinceUpdate: 0 },
 			theme,
 		).render(width);
+		assert.match(lines.join("\n"), /123\/135/);
 		for (const line of lines) assert.ok(visibleWidth(line) <= width);
 	}
 });
