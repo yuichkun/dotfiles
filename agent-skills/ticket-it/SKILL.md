@@ -1,6 +1,9 @@
 ---
 name: ticket-it
-description: Turn a feature idea, bug, refactor, or UI tweak into a zero-ambiguity GitHub Issue that a junior-level worker AI (Cursor's Composer 2, or a similarly cheap model) can implement without making a single meaningful decision. Grills the user relentlessly one question at a time, researches the codebase, compares libraries, and records rejected alternatives so the worker can't drift mid-implementation. Use this skill whenever the user asks to "ticket this", "make an issue", "spec this out", "hand this off to Composer / Cursor / the worker", "チケット化して", "Issueにして", "prepare a spec", or gives you a GitHub Issue URL and asks to update the description. Make sure to use this skill for ANY handoff from planning (Opus 4.6) to implementation (cheap worker model) — features, bugs, refactors, or UI — even when the user doesn't explicitly say "issue" or "ticket" but the intent is to write a worker-ready spec.
+description: >-
+  Write a zero-ambiguity GitHub Issue for a cheap worker model. Use only
+  when the user explicitly asks to ticket, spec, or write/update an Issue
+  (チケット化して / Issueにして / "ticket this").
 ---
 
 # ticket-it

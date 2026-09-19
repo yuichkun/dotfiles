@@ -1,16 +1,8 @@
 ---
 name: explain-with-diagrams
 description: >-
-  Generates a visual, step-by-step explanation of any concept, code, architecture,
-  or process the user asks about. Saves the result as a Markdown file in a tmp
-  directory so the user can view it in a Markdown previewer with rendered Mermaid
-  diagrams.
-
-  Use this skill whenever the user says "/explain", asks you to explain something
-  in detail, wants a visual walkthrough, or requests a diagram-rich explanation.
-  Also trigger when the user asks things like "how does X work?", "walk me through
-  Y", "explain Z step by step", or "I don't understand W" — especially when the
-  topic is complex enough to benefit from diagrams.
+  Write a diagram-rich Markdown explanation to a tmp file. Use for
+  `/explain` or when the user asks for a visual or diagram explanation.
 ---
 
 # Explain — Visual Step-by-Step Explanations

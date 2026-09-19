@@ -1,20 +1,9 @@
 ---
 name: codex-review-loop
 description: >-
-  Autonomously run the codex ↔ developer review cycle on a GitHub PR: fetch findings
-  on latest commit; fairly evaluate each on its merits; fix valid ones with
-  project-appropriate commits + tests; push; post a fresh top-level `@codex review`
-  PR comment; schedule next wakeup (continue) or return unscheduled (stop). For
-  `/loop /codex-review-loop`, `/loop` provides cross-invocation cadence; this skill
-  runs exactly one cycle/call and decides if another is needed. Use for
-  "codexのレビュー対応して", "codex とのラリー回して", "codex review loop",
-  "@codexと回して", "codexのレビュー対応ループ", or any request to handle the rally
-  end-to-end. Also trigger proactively just after the user creates a PR codex will
-  review if they signal they want the back-and-forth handled. Handle codex's 👀
-  heartbeat: a 👀 on your re-request comment means processing; absence after a
-  reasonable wait means the mention was dropped, so re-post it. Pause only for a
-  finding genuinely requiring the user's judgment, never just because the reviewer
-  pushed back.
+  Run one cycle of the Codex PR review loop. Use when the user asks to
+  handle Codex review back-and-forth (`/loop /codex-review-loop`,
+  レビュー対応して).
 ---
 
 # Codex review loop

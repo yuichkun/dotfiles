@@ -1,7 +1,9 @@
 ---
 name: image-gen
 description: >-
-  Generate raster images from text prompts using Google's Gemini / Imagen API (Nano Banana = gemini-3-pro-image, and Imagen 4). Use this whenever the user asks to create, generate, draw, make, or design an image, illustration, picture, icon, logo, hero/cover/banner art, background, texture, avatar, concept art, or any visual asset — including phrasings like "画像作って", "イラスト描いて", "図を作って", "アイキャッチ", "サムネ", "挿絵", "ビジュアル". Also use PROACTIVELY (without being asked) when building a website, slide deck, document, README, or learning material that would clearly benefit from illustrations or visual assets. Supports reference images for editing and for keeping a consistent art style across many images. Note: for precise charts/graphs/diagrams with exact text or math, prefer SVG or code — AI raster generation garbles text and equations.
+  Generate or edit raster images with Gemini / Imagen. Use when the user
+  asks to generate an image, illustration, icon, thumbnail, or similar
+  bitmap. Not for charts, Mermaid, or exact-text diagrams.
 ---
 
 # image-gen — Gemini / Imagen 画像生成

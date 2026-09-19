@@ -1,21 +1,8 @@
 ---
 name: vitepress-learning-site
 description: >-
-  Build a research-grade multi-page VitePress site from scratch so the user deeply
-  understands the topic. Interview first: settle
-  scope/audience/language/depth/boundaries one at a time; gather primary sources
-  pre-writing; scaffold Mermaid + optional KaTeX; parallel sub-agent writers obey
-  strict fact-first rules (mandatory source citations/file, explicit uncertainty
-  markers, zero speculation); use an independent external LLM/agent (e.g. Codex) to
-  audit facts/structure; verify math layout, Mermaid SVGs, and console errors in
-  real-browser dev tools—build success alone is insufficient. Use for "build a
-  learning site" / "make a study reference" / "produce a structured explainer for
-  X", a VitePress-based "I want to deeply understand X" outcome, or
-  "ドキュメントサイト作って" / "学習リファレンス作って" /
-  "Xの内部を解説するサイト作って"; also imminent self-study needing a persistent
-  multi-page written resource. Not for single-page READMEs/blog-style
-  writeups/product-landing docs; only structured multi-page long-form learning
-  deliverables.
+  Build a multi-page VitePress learning site. Use when the user asks for a
+  structured learning or study-reference site, not a README or landing page.
 ---
 
 # VitePress Learning Site Builder
